@@ -127,9 +127,11 @@ int do_backup(char * path, int mod) {
 	if (S_ISREG(info.st_mode)) { //file
 		if ((fd = open(path, O_RDONLY)) < 0)
 			return -7; //open error
-		
-		if ((target_fd = open(target_path, O_RDWR|O_CREAT, 777)) < 0)
+		if ((target_fd = open(target_path, O_RDWR|O_CREAT, 0777)) < 0) {
+			printf("errno: %d", errno);
 			return -2; //open error
+
+		}
 		if (make_backup(target_fd, fd) < 0) {
 			close(target_fd);
 			close(fd);
@@ -146,6 +148,7 @@ int do_backup(char * path, int mod) {
 	/*if ((fd = open(path, )) < 0) {
 		return -1;
 	}*/
+
 	return 0;
 }
 
