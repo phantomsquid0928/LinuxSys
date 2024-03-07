@@ -7,7 +7,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
-#include <queue.h>
+// #include <queue.h>
 #define MAXPATH 4096
 #define MAXDIR 255
 #define COMMAND_ENT 5
@@ -32,6 +32,100 @@ typedef struct {
 	char first[MAXPATH];
 	char second[MAXPATH];
 }pathpair;
+
+///////////////queue
+typedef struct node {
+	struct node * next;
+	void * data;
+}node;
+typedef struct queue queue;
+typedef struct queue {
+	node * head;
+	node * rear;
+	int size;
+
+	void * (*front)(queue *);
+	void (*pop)(queue *);
+	void (*push)(queue *, void *);
+	int (*empty)(queue *);
+	void (*clear)(queue *);
+}queue;
+
+void * front(queue * self) {
+	if (self->head == NULL) {
+		return NULL;
+	}
+	return self->head->data;
+}
+void pop(queue * self) {
+	node * temp = self->head;
+	if (self->head == NULL) return;
+	
+	if (self->head->next == NULL) {
+		self->head = NULL;
+		self->rear = NULL;
+		self->size = 0;
+		free(temp);
+		return;
+	}
+	self->head = self->head->next;
+	self->size--;
+	free(temp);
+}
+void push(queue * self, void * data) {
+	node * temp = (node *)malloc(sizeof(node));
+	temp->data = data;
+	temp->next = NULL;
+	if (self->head == NULL) {
+		self->head = temp;
+		self->rear = temp;
+		self->size++;
+		return;
+	}
+	self->rear->next = temp;
+	self->rear = temp;
+	self->size++;
+}
+int empty(queue * self) {
+	return self->size == 0 ? 1 : 0;
+}
+void clear(queue * self) {
+	if (self->head == NULL) return;
+	node * n = self->head;
+	node * temp = n;
+	node * prev;
+	while(temp) {
+		prev = temp;
+		temp = temp -> next;
+		free(prev);
+	}
+//	free(prev);
+	self->size = 0;
+	self->head = NULL;
+	self->rear = NULL;
+}
+queue * initQueue() {
+	queue * temp = (queue*)malloc(sizeof(queue));
+	temp->head = NULL;
+	temp->rear = NULL;
+	temp->size = 0;
+
+	temp->front = front;
+	temp->pop = pop;
+	temp->push = push;
+	temp->empty = empty;
+	temp->clear = clear;
+	temp->size = 0;
+
+	return temp;
+}
+void destroyQueue(queue * target) {
+	free(target);
+}
+
+
+
+/////////////////
 typedef struct {
     commands val;
 	const char *str;
@@ -42,6 +136,7 @@ char backup_path[MAXPATH];
 ///////////////////^^^^^^^^// declare zone//////////////////
 
 //////////////////vv// init, func zone //////////////////
+
 void initEnum() {
 	int i= 0;
 
@@ -109,51 +204,74 @@ int make_log(char* target_path, char*path, int mod) {
 //occur here
 //workers only produce path, open file. throws opened fds from open() to
 //makers
-int bfs_worker(char * target_path, char * path, void * func) {
-	queue<pathpair> q;///TODO cpp abstract code
+int bfs_worker(char * target_path, char * path, int mod) {
+	int fd, target_fd;
+	queue q;
+	q = *initQueue();// cpp abstract code
 	char tempname[MAXDIR];
 	char temppath[MAXPATH];
+	char tempTargetPath[MAXPATH];
 	struct stat tempstat;
 	struct dirent * dentry;
- 	mkdir(target_path);
-	pathpair node;
-	sprintf(node.first, "%s", path);
-    sprintf(node.second, "%s", target_path);	
-	q.push(node);
-	while(!q.empty()) {
-		char* curpath =q.front().first;
-		char* target_curpath = q.front().second;
+
+	pathpair pair;
+	
+	mkdir(target_path, 0777);
+	sprintf(pair.first, "%s", path);
+    sprintf(pair.second, "%s", target_path);	
+	q.push(&q, &pair);
+
+	while(!q.empty(&q)) {
+		pathpair* temp = (pathpair *)q.front(&q);
+		char* curpath = temp->first;
+		char* target_curpath = temp->second;
 		DIR * x; 
+		printf("watching: %s, %s\n", curpath, target_curpath);
 		if ((x = opendir(curpath)) == NULL || chdir(curpath) == -1) {
+			printf("fked\n");
 			return -12; //bfs err
 		}
-		q.pop();
-		opendir(x);
+		q.pop(&q);
 		while((dentry = readdir(x)) != NULL) {
 			if (dentry -> d_ino == 0)
 				continue;
-			memcpy(tempname, dentry -> dname, MAXDIR);
+			memcpy(tempname, dentry->d_name, MAXDIR);
+			if (!strcmp(tempname, ".") || !strcmp(tempname, ".."))
+				continue;
 			memset(temppath, 0, sizeof(temppath));
+			memset(tempTargetPath, 0, sizeof(tempTargetPath));
 			if (stat(tempname, &tempstat) == -1) {
+				printf("fked2\n");
 				return -13; //stat err
 			}
+			
+			sprintf(temppath, "%s/%s", curpath, tempname); //path
+			sprintf(tempTargetPath, "%s/%s", target_curpath, tempname); //backup 
+			printf("spreading \n %s \n%s\n\n", temppath, tempTargetPath);
+			// strcat(target_path, "/");
+			// strcat(target_path, tempname);
 			if (S_ISREG(tempstat.st_mode)) {
-				sprintf(temppath, "%s/%s", curpath, tempname);
+				
 				//save file in backup
 				if ((fd = open(temppath, O_RDONLY)) < 0) { //path need modi
+					printf(";\n");
 					return -7; //open er
 				}
-				if ((target_fd = open(target_path, O_WRONLY, 0777)) < 0) {
+				/**
+				 *  TODO: mod y for existing check here, same on above. 
+				 */
+				if ((target_fd = open(tempTargetPath, O_WRONLY | O_CREAT, 0777)) < 0) {
+					printf("=2\n");
 					return -2; //open er, target_path also need mod
 				}
 				if (make_backup(target_fd, fd) < 0) { //change func by func
 					close(fd);
 					close(target_fd);
-					remove();
+					// remove();
 					printf("error");
 					return -4;
 				}
-				if (make_log(path, target_path) < 0) {
+				if (make_log(temppath, tempTargetPath, mod) < 0) {
 					return -5; //log error
 				}
 				close(fd);
@@ -161,8 +279,11 @@ int bfs_worker(char * target_path, char * path, void * func) {
 			}
 			if (S_ISDIR(tempstat.st_mode) && mod & 2 != 0) {
 				//mkdir in backup
-
-				q.push(x);
+				mkdir(tempTargetPath, 0777);
+				pathpair temp2;
+				sprintf(temp2.first, "%s", temppath);
+				sprintf(temp2.second, "%s", tempTargetPath);
+				q.push(&q, &temp2);
 			}
 		}
 	}
@@ -240,7 +361,8 @@ int do_backup(char * path, int mod) {
 		if (mod & 3 == 0)
 			return -11; //flag error 2
 		//if ((fd = open(path, O_RDONLY)) < 0) return -2; //open error
-			
+		printf("bfs called");
+		bfs_worker(target_path, path, mod);
 	}
 	/*if ((fd = open(path, )) < 0) {
 		return -1;
