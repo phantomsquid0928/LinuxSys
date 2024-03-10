@@ -7,6 +7,9 @@
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
+
+#include <openssl/md5.h>
+
 // #include <queue.h>
 #define MAXPATH 4096
 #define MAXDIR 255
@@ -20,14 +23,35 @@ static const char *commandList[] = {
 static const char *logModList[] = {
 	"backuped to", "removed by", "recovered to", "already backuped to", "not changed with"
 };
+
+/////////////////// Log struct for .log file//////////
+
 typedef struct Log{
-	char absolute_path[MAXPATH];
-	char backup_path[MAXPATH];
-	int timestamp;
-	char purename[MAXPATH];
+	unsigned char md[MD5_DIGEST_LENGTH]; //get this when read .log file              if md1, absolute_path1 == md2 abpath2 -> they are same (-y)
+	char absolute_path_dir[MAXPATH]; //linked dir
+	int timestamp;          //home/backup/<timestamp>
+	char pure_path[MAXPATH];    //path til name          timestamp + pure_path == backup_path ((ex) > home/backup/<timestamp>/b/a.txt)
+	char purename[MAXDIR];       //-> absolute_path_dir + pure_path == absolute_path   if pure_path == purename -> file else file inside dir
 	struct Log * next;
 }log;
-log * logList;
+
+log * logList; //linked list to save Logs
+
+log * initLog() {
+
+}
+
+log ** searchbystamp(int timestamp) {
+
+}
+log ** searchbypath(char * absolute_path) { //absolute_path_dir
+
+}
+
+
+
+/////////////////////vv pathpair for bfs ///////////
+
 typedef struct {
 	char first[MAXPATH];
 	char second[MAXPATH];
@@ -133,6 +157,7 @@ typedef struct {
 static int commandSize = sizeof(commandList) / sizeof(commandList[0]);
 commandsMap * conversion[COMMAND_ENT];
 char backup_path[MAXPATH];
+char logfile_path[MAXPATH];
 ///////////////////^^^^^^^^// declare zone//////////////////
 
 //////////////////vv// init, func zone //////////////////
@@ -161,9 +186,12 @@ void initBackupDir() {
 	//printf("%s", backup_path);
 	if (access(backup_path, F_OK))
 		mkdir(backup_path, 0777);
+	sprintf(logfile_path, "%s/%s", backup_path, "ssubak.log");
+	if (access(logfile_path, F_OK))
+		creat(logfile_path, 0777);
 }
 void initBackupList() { //io log file
-
+	//get log from logfile_path, 
 }
 /////////////////// maker_zone (io zone) /////////////////////
 //makers gets fds as parameter, then do file io.
@@ -204,7 +232,7 @@ int make_log(char* target_path, char*path, int mod) {
 //occur here
 //workers only produce path, open file. throws opened fds from open() to
 //makers
-int bfs_worker(char * target_path, char * path, int mod) {
+int bfs_file_worker(char * target_path, char * path, int mod) {
 	int fd, target_fd;
 	queue q;
 	q = *initQueue();// cpp abstract code
@@ -262,7 +290,7 @@ int bfs_worker(char * target_path, char * path, int mod) {
 				 */
 				if ((target_fd = open(tempTargetPath, O_WRONLY | O_CREAT, 0777)) < 0) {
 					printf("=2\n");
-					return -2; //open er, target_path also need mod
+					return -2; //open er, target_path also need mod , no sudo
 				}
 				if (make_backup(target_fd, fd) < 0) { //change func by func
 					close(fd);
@@ -277,7 +305,7 @@ int bfs_worker(char * target_path, char * path, int mod) {
 				close(fd);
 				close(target_fd);
 			}
-			if (S_ISDIR(tempstat.st_mode) && mod & 2 != 0) {
+			if (S_ISDIR(tempstat.st_mode) && (mod & 2) != 0) {
 				//mkdir in backup
 				mkdir(tempTargetPath, 0777);
 				pathpair temp2;
@@ -288,10 +316,14 @@ int bfs_worker(char * target_path, char * path, int mod) {
 		}
 	}
 }
+int bfs_list_worker() { //bfs the backup file by searching log list
+	
+}
 int do_backup(char * path, int mod) {
 	int fd;
 	int target_fd;
-	char * time = "34434434";
+	// char * time = "34434434";
+	char * time = "34566666";
 	char cwd[1024];
 	struct stat info;
 	struct dirent *dentry;
@@ -338,14 +370,14 @@ int do_backup(char * path, int mod) {
 	//printf("%d\n", strlen(target_path));
 	printf("::::::::path : %s\n", path);
 	if (S_ISREG(info.st_mode)) { //file
-		if (mod & 3 != 0) { //-d -r flag but file
+		if ((mod & 3) == 1 || (mod & 3) == 2) { //-d -r flag but file
 			return -10; //flag error
 		}
 		if ((fd = open(path, O_RDONLY)) < 0)
 			return -7; //open error
 		if ((target_fd = open(target_path, O_WRONLY|O_CREAT, 0777)) < 0) {
 			printf("errno: %d", errno);
-			return -2; //open error
+			return -2; //open error, no sudo
 		}
 		if (make_backup(target_fd, fd) < 0) {
 			close(target_fd);
@@ -358,11 +390,11 @@ int do_backup(char * path, int mod) {
 			return -5; //logger error
 	}
 	else if (S_ISDIR(info.st_mode)) { //path is dir
-		if (mod & 3 == 0)
-			return -11; //flag error 2
+		if ((mod & 3) != 1 && (mod & 3) != 2) 
+ 			return -11; //flag error 2
 		//if ((fd = open(path, O_RDONLY)) < 0) return -2; //open error
 		printf("bfs called");
-		bfs_worker(target_path, path, mod);
+		return bfs_file_worker(target_path, path, mod);
 	}
 	/*if ((fd = open(path, )) < 0) {
 		return -1;
