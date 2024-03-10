@@ -144,7 +144,10 @@ char * substr(char * target, int a, int b) {
     return strncpy(temp, target + a, b - a);
 }
 
-int add_filestr(filestr * target) {
+int add_filestr(filestr * target) { 
+    /**
+     * TODO: 중복 dir 들어왓을 때 childs에 추가 필요.
+    */
     // str[strcnt] = *target;
     // strcnt++;
     // printf("\norigin : %s\n backup : %s\n childs : \n", target->origin, target->backup[0]);
@@ -163,17 +166,86 @@ int add_filestr(filestr * target) {
     char assembled_route[4096];
     int flag = 0;
     // sprintf(assembled_route, "%s/%s", target->origin, target->childs[0]);
-    printf("%s\n", target->origin);
-    while(ptr) {
-        printf("   %s\n", ptr->origin);
-        if (!strcmp(ptr->origin, target->origin)) {
-            printf("hello");
+    // printf("%s\n", target->origin);
+    while(ptr) { //여기까지 하면 O(ptrlen * (n + m))
+        // printf("   %s\n", ptr->origin);
+        if (!strcmp(ptr->origin, target->origin)) { //중복!
+            // printf("hello");
             ptr->stampscnt++;
             ptr->backup[ptr->stampscnt] = (char*)malloc(sizeof(char) * 4096);
             ptr->timestamps[ptr->stampscnt] = (char*)malloc(sizeof(char) * 255);
             strcpy(ptr->backup[ptr->stampscnt], target->backup[0]);
             strcpy(ptr->timestamps[ptr->stampscnt], target->timestamps[0]);
+            int i = 0, j = 0;
             
+            //정렬되잇으므로 투포인터 ^^ O(n + m) 그는 신이야...
+            char ** rest = (char**)malloc(sizeof(char*) * 4096);
+
+            int rescnt = 0;
+            if (ptr->childscnt > 0 || target->childscnt > 0) {
+                for (int i = 0; i <= ptr->childscnt; i++) {
+                    printf("a : %s\n", ptr->childs[i]);
+                }
+                printf("\n");
+                for (int i = 0; i <= target->childscnt; i++) {
+                    printf("a : %s\n", target->childs[i]);
+                }
+                for (i = 0, j = 0;;) {
+                    if (i >= ptr->childscnt) {
+                        rest[rescnt] = (char*)malloc(sizeof(char) * 255);
+                        strcpy(rest[rescnt], target->childs[j]);
+                        rescnt++;
+                        // res[rescnt++] = target->childs[j];
+                        j++;
+                        if (j > target->childscnt) break;
+                        continue;
+                    }
+                    if (j >= target->childscnt) {
+                        rest[rescnt] = (char*)malloc(sizeof(char) * 255);
+                        strcpy(rest[rescnt], ptr->childs[i]);
+                        rescnt++;
+                        // res[rescnt++] = ptr->childs[i];
+                        j++;
+                        if (i > ptr->childscnt) break;
+                        continue;
+                    }
+                    int res = strcmp(ptr->childs[i], target->childs[j]);
+                    if (res == 0) {
+                        rest[rescnt] = (char*)malloc(sizeof(char) * 255);
+                        strcpy(rest[rescnt], ptr->childs[i]);
+                        rescnt++;
+                        // res[rescnt++] = ptr->childs[i];
+                        i++;
+                        j++;
+                    }
+                    if (res < 0) {
+                        rest[rescnt] = (char*)malloc(sizeof(char) * 255);
+                        strcpy(rest[rescnt], ptr->childs[i]);
+                        rescnt++;
+                        // res[rescnt++] = ptr->childs[i];
+                        i++;
+                    }
+                    if (res > 0) {
+                        rest[rescnt] = (char*)malloc(sizeof(char) * 255);
+                        strcpy(rest[rescnt], target->childs[j]);
+                        rescnt++;
+                        // res[rescnt++] = target->childs[j];
+                        j++;
+                    }
+                }
+            }
+            // free(ptr->childs);
+            // realloc(ptr->childs, sizeof(char*) * rescnt);
+            for (int i = 0; i < rescnt; i++) {
+                if (ptr->childs[i] == NULL) {
+                    ptr->childs[i] = (char*)malloc(sizeof(char) * 255);
+                }
+                strcpy(ptr->childs[i], rest[i]);
+                printf("---- %s\n", rest[i]);
+            }
+            free(rest);
+            // ptr->childs = rest;
+            ptr->childscnt = rescnt - 1;
             prev = ptr;
             ptr = ptr->next;
             flag = 1;
