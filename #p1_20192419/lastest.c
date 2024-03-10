@@ -124,8 +124,9 @@ filestr * head = NULL;
 // };
 int strcnt = 0;
 static pathpair pairs[10] = { //change to linkedlist
-    {"34434434", "home/ph/linuxhw"}, //home/ph backukped to 2343434
-    {"34566666", "home/ph/linuxhw"}, //home/ph/b/b.txt ~ to 2334356
+    {"34434434", "home/ph/linuxhw"}, //home/ph/b backukped to 2343434
+    {"34566666", "home/ph/linuxhw"}, //home/ph/b ~ to 2334356
+    {"34566669", "home/ph/linuxhw/b"}, //home/ph/b/b.txt ~ t
 };
 int pairscnt = 2;
 /**
@@ -191,13 +192,14 @@ int add_filestr(filestr * target) {
                     printf("a : %s\n", target->childs[i]);
                 }
                 for (i = 0, j = 0;;) {
+                    // printf("%d %d\n", i, j);
                     if (i >= ptr->childscnt) {
                         rest[rescnt] = (char*)malloc(sizeof(char) * 255);
                         strcpy(rest[rescnt], target->childs[j]);
                         rescnt++;
                         // res[rescnt++] = target->childs[j];
                         j++;
-                        if (j > target->childscnt) break;
+                        if (j >= target->childscnt) break;
                         continue;
                     }
                     if (j >= target->childscnt) {
@@ -205,8 +207,8 @@ int add_filestr(filestr * target) {
                         strcpy(rest[rescnt], ptr->childs[i]);
                         rescnt++;
                         // res[rescnt++] = ptr->childs[i];
-                        j++;
-                        if (i > ptr->childscnt) break;
+                        i++;
+                        if (i >= ptr->childscnt) break;
                         continue;
                     }
                     int res = strcmp(ptr->childs[i], target->childs[j]);
@@ -233,19 +235,20 @@ int add_filestr(filestr * target) {
                         j++;
                     }
                 }
+                ptr->childscnt = rescnt - 1;
+                for (int i = 0; i < rescnt; i++) {
+                    if (ptr->childs[i] == NULL) {
+                        ptr->childs[i] = (char*)malloc(sizeof(char) * 255);
+                    }
+                    strcpy(ptr->childs[i], rest[i]);
+                    printf("---- %s\n", rest[i]);
+                }
+                free(rest);
             }
             // free(ptr->childs);
             // realloc(ptr->childs, sizeof(char*) * rescnt);
-            for (int i = 0; i < rescnt; i++) {
-                if (ptr->childs[i] == NULL) {
-                    ptr->childs[i] = (char*)malloc(sizeof(char) * 255);
-                }
-                strcpy(ptr->childs[i], rest[i]);
-                printf("---- %s\n", rest[i]);
-            }
-            free(rest);
+            
             // ptr->childs = rest;
-            ptr->childscnt = rescnt - 1;
             prev = ptr;
             ptr = ptr->next;
             flag = 1;
