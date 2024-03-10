@@ -124,8 +124,8 @@ filestr * head = NULL;
 // };
 int strcnt = 0;
 static pathpair pairs[10] = { //change to linkedlist
-    {"34434434", "home/ph/linuxhw"}, //home/ph/b backukped to 2343434
-    {"34566666", "home/ph/linuxhw"}, //home/ph/b ~ to 2334356
+    {"34434434", "home/ph/linuxhw/b"}, //home/ph/b backukped to 2343434
+    {"34566666", "home/ph/linuxhw/b"}, //home/ph/b ~ to 2334356
     {"34566669", "home/ph/linuxhw/b"}, //home/ph/b/b.txt ~ t
 };
 int pairscnt = 2;
@@ -183,7 +183,7 @@ int add_filestr(filestr * target) {
             char ** rest = (char**)malloc(sizeof(char*) * 4096);
 
             int rescnt = 0;
-            if (ptr->childscnt > 0 || target->childscnt > 0) {
+            if (ptr->childscnt >= 0 || target->childscnt >= 0) {
                 for (int i = 0; i <= ptr->childscnt; i++) {
                     printf("a : %s\n", ptr->childs[i]);
                 }
@@ -192,23 +192,27 @@ int add_filestr(filestr * target) {
                     printf("a : %s\n", target->childs[i]);
                 }
                 for (i = 0, j = 0;;) {
-                    // printf("%d %d\n", i, j);
-                    if (i >= ptr->childscnt) {
+                    printf("%d %d\n", i, j);
+                    if (i > ptr->childscnt) {
+                        if (j > target->childscnt) break;
                         rest[rescnt] = (char*)malloc(sizeof(char) * 255);
                         strcpy(rest[rescnt], target->childs[j]);
                         rescnt++;
                         // res[rescnt++] = target->childs[j];
                         j++;
-                        if (j >= target->childscnt) break;
+                        
+                        // j++;
                         continue;
                     }
-                    if (j >= target->childscnt) {
+                    if (j > target->childscnt) {
+                        if (i > ptr->childscnt) break;
                         rest[rescnt] = (char*)malloc(sizeof(char) * 255);
                         strcpy(rest[rescnt], ptr->childs[i]);
                         rescnt++;
                         // res[rescnt++] = ptr->childs[i];
                         i++;
-                        if (i >= ptr->childscnt) break;
+                        
+                        // i++;
                         continue;
                     }
                     int res = strcmp(ptr->childs[i], target->childs[j]);

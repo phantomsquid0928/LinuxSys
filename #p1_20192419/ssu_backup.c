@@ -147,6 +147,28 @@ void destroyQueue(queue * target) {
 	free(target);
 }
 
+//useful
+int return_last_name(char *absolute_path) {
+    // char temp[4096];
+    // sprintf(temp, "%s", absolute_path);
+    // int cnt = strlen(*absolute_path);
+    int i;
+    // printf("%s",*absolute_path);
+    for (i = strlen(absolute_path) - 1; i >= 0; i--) {
+        if (absolute_path[i] == '/') {
+            return i;
+        }//
+    }
+    return 0;
+}
+//useful
+char * substr(char * target, int a, int b) {
+    // printf("%d", strlen(target));
+    // char temp[strlen(target) + 100];
+    char* temp = (char*)malloc(strlen(target) - 1);
+    return strncpy(temp, target + a, b - a);
+}
+
 
 
 /////////////////
@@ -158,7 +180,9 @@ static int commandSize = sizeof(commandList) / sizeof(commandList[0]);
 commandsMap * conversion[COMMAND_ENT];
 char backup_path[MAXPATH];
 char logfile_path[MAXPATH];
-///////////////////^^^^^^^^// declare zone//////////////////
+
+
+///////////////////^^^^^^^^// declare , util zone//////////////////
 
 //////////////////vv// init, func zone //////////////////
 
@@ -322,8 +346,9 @@ int bfs_list_worker() { //bfs the backup file by searching log list
 int do_backup(char * path, int mod) {
 	int fd;
 	int target_fd;
-	// char * time = "34434434";
-	char * time = "34566666";
+	char * time = "34434434";
+	// char * time = "34566666";
+	// char * time = "34566669";
 	char cwd[1024];
 	struct stat info;
 	struct dirent *dentry;
@@ -345,17 +370,19 @@ int do_backup(char * path, int mod) {
 	char *ptr = strtok(temp, "/");
 	char *tmp;
 	char purename[MAXDIR];
-	if (ptr == NULL) {
-		sprintf(purename, "%s", ptr);
-	}
-	else {
-		while (1) {
-			tmp = ptr;
-			ptr = strtok(NULL, "/");
-			if (ptr == NULL) break;
-		}
-		sprintf(purename, "%s", tmp);
-	}
+	sprintf(purename, "%s", substr(temp, return_last_name(path) + 1, strlen(path)));
+	printf("\n-------%s--------\n", purename);
+	// if (ptr == NULL) {
+	// 	sprintf(purename, "%s", ptr);
+	// }
+	// else {
+	// 	while (1) {
+	// 		tmp = ptr;
+	// 		ptr = strtok(NULL, "/");
+	// 		if (ptr == NULL) break;
+	// 	}
+	// 	sprintf(purename, "%s", tmp);
+	// }
 	//sprintf(target_path, "%s/%s/%s", backup_path, time, purename);
 	strcpy(target_path, backup_path);
 	strcat(target_path, "/");
@@ -363,13 +390,14 @@ int do_backup(char * path, int mod) {
 	printf("%s", target_path);
 	if (access(target_path, F_OK))
 		mkdir(target_path, 0777);
-	strcat(target_path, "/");
-	strcat(target_path, purename);
-	//home/backup/<time>/a.txt
-	printf("%s\n", target_path);
+	
 	//printf("%d\n", strlen(target_path));
 	printf("::::::::path : %s\n", path);
 	if (S_ISREG(info.st_mode)) { //file
+		strcat(target_path, "/");
+		strcat(target_path, purename);
+		//home/backup/<time>/a.txt
+		printf("%s\n", target_path);
 		if ((mod & 3) == 1 || (mod & 3) == 2) { //-d -r flag but file
 			return -10; //flag error
 		}
