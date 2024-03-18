@@ -124,13 +124,17 @@ filestr * head = NULL;
 // };
 int strcnt = 0;
 static pathpair pairs[10] = { //change to linkedlist
-    {"34434434", "home/ph/linuxhw/b"}, //home/ph/b backukped to 2343434
-    {"34566666", "home/ph/linuxhw/b"}, //home/ph/b ~ to 2334356
     {"34566669", "home/ph/linuxhw/b"}, //home/ph/b/b.txt ~ t
+    {"34434434", "home/ph/linuxhw/b/새 폴더"}, //home/ph/b backukped to 2343434
+    {"34566666", "home/ph/linuxhw/b"}, //home/ph/b ~ to 2334356
+    
+    // {"34566669", "home/ph/linuxhw/b"}, //home/ph/b/b.txt ~ t
 };
 int pairscnt = 2;
 /**
  * TODO: pairs + backup files => str needed
+ *       log read function + log -> pairs convertor
+ *       then load_backup
 */
 
 //pathpair
@@ -145,9 +149,63 @@ char * substr(char * target, int a, int b) {
     return strncpy(temp, target + a, b - a);
 }
 
+//useful
+int return_last_name(char *absolute_path) {
+    // char temp[4096];
+    // sprintf(temp, "%s", absolute_path);
+    // int cnt = strlen(*absolute_path);
+    int i;
+    // printf("%s",*absolute_path);
+    for (i = strlen(absolute_path) - 1; i >= 0; i--) {
+        if (absolute_path[i] == '/') {
+            return i;
+        }//
+    }
+    return 0;
+}
+/**
+ * find root of filestr
+*/
+int getRoot(char *res){ // linux/a, linux/b 와 같이 동일한게 잇으면 ... /개수 새기!!!!!!!!!!!!!!  이거다
+    filestr * temp;
+    filestr * target;
+    // char *res = (char*)malloc(sizeof(char) * 4096);/
+    temp = head;
+    int minslash = 10000; // /가 1만개인 dir는 파일 경로가 4096이 최대라 없는게 당연
+    int issame = 0; // flag that if there is same lv of dir like linux/a, linux/b
+    int cnt = 0;
+    while(temp) {
+        int len = strlen(temp->origin);
+        cnt = 0;
+        printf("%d\n", len);
+        for (int i =0 ; i< len; i++) {
+            if (temp->origin[i] == '/') cnt++;
+        }
+        if (minslash > cnt) {
+            minslash = cnt;
+            target = temp;
+            issame = 0;
+        }
+        if (minslash == cnt && strcmp(target->origin, temp->origin)) { //cnt같은데 안같으면
+            issame = 1;
+        }
+        temp = temp ->next;
+    }  
+    if (issame == 1) { //there is same lv of path
+        sprintf(res, "%s", substr(target->origin, 0, return_last_name(target->origin)));
+        return 1;
+    }
+    else {
+        sprintf(res, "%s", target->origin);
+        return 0;
+    }
+}
+
+
 int add_filestr(filestr * target) { 
     /**
-     * TODO: 중복 dir 들어왓을 때 childs에 추가 필요.
+     * TODO: 중복 dir 들어왓을 때 childs에 추가 필요. <- solved but not perfect... use just file as indictor
+     * TODO: head가 부모가 아닐 수 잇음 -> 나중에 root를 찾는 getRoot()로 root 찾은 뒤 bfs를 해야.
     */
     // str[strcnt] = *target;
     // strcnt++;
@@ -161,7 +219,8 @@ int add_filestr(filestr * target) {
     if (head == NULL){
         head = target;
         return 1;
-    } 
+    }
+    
     filestr * ptr = head;
     filestr * prev;
     char assembled_route[4096];
@@ -288,6 +347,61 @@ void show_all() {
     }
 }
 
+typedef struct viewer{
+    char path[4096];
+    int lv;
+}viewer; //??
+void show_as_bfs() {
+    filestr * temp;
+    temp = head;
+
+    // char * root = getenv("HOME"); // /home/ph/
+    // printf("%s\n", root);
+    queue q = *initQueue();
+
+    // q.push(&q, temp);
+    char root[4096];
+    getRoot(root); //travels head linkedlist, find highest dir.
+    
+    char nextpath[4096];
+    viewer *v = (viewer*)malloc(sizeof(viewer));
+    strcpy(v->path, root);
+    v->lv = 0;
+    q.push(&q, v);
+    printf("%s\n", root);
+
+    while(!q.empty(&q)) {
+        viewer *target = q.front(&q);
+        q.pop(&q);
+        temp = head;
+        while(temp) {
+            // if ()
+            if (!strcmp(temp->origin, target->path)) break;
+            temp = temp ->next;
+        }
+        if (temp == NULL) continue;
+        if (temp->childscnt == -1) { //file 
+            for (int i = 0;i < target->lv; i++) {
+                printf("  ");
+            }
+            for (int i =0 ;i <= temp->stampscnt; i++) {
+                printf("%s %s", temp->backup[i], temp->timestamps);
+            }
+            continue;
+        }
+        printf("%s\n", temp->origin);
+        for (int i = 0; i<= temp->childscnt; i++) {
+            sprintf(nextpath, "%s/%s", target->path, temp->childs[i]);
+            // printf("ff%s", nextpath);
+            viewer * t = (viewer*)malloc(sizeof(viewer));
+            strcpy(t->path, nextpath);
+            t->lv = target->lv + 1;
+            q.push(&q, t);
+        }
+    }
+}
+
+
 filestr* init_filestr(char * origin, char * backup, char * stamp) { //modify this after change to linked
     
     filestr * temp = (filestr*)malloc(sizeof(filestr));
@@ -369,6 +483,11 @@ int bfs_fileload(char * origin, char * stampdir, char * stamp) {
         add_filestr(target);
     }
     q.clear(&q);
+
+    /**
+     * TODO: modify if there is same lv of dir,
+    */
+
 }
 int find_link(char * name, char * res) {
     for (int i =0 ; i< 10; i++) { //10 = pairs cnt 
@@ -426,7 +545,10 @@ int main() {
     // printf("%s", child->backup[1]);
 
     load_backup(backup);
-    show_all();
+    // show_all();
+
+    show_as_bfs();
+
     // for (int i =0 ; i < 7; i++) {
     //     printf("%s\n", str[i].origin);
     //     for (int j = 0; j < str[i].childscnt; j++) {
