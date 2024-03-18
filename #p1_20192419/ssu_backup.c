@@ -24,16 +24,58 @@ static const char *logModList[] = {
 	"backuped to", "removed by", "recovered to", "already backuped to", "not changed with"
 };
 
+
+
+typedef struct backupNode {
+  char backupPath[MAXPATH];
+  char oripath[MAXPATH];
+  struct stat statbuf;
+  char stamp[MAXDIR];
+
+  struct backupNode *next;
+} backupNode;
+
+typedef struct filedir {
+    char path[MAXPATH];
+    char name[MAXDIR];
+    struct stat statbuf;
+    // char backupPath[MAXPATH];
+    backupNode * head;
+    struct filedir ** childs;
+    int childscnt; //file : -1, dir : many
+}filedir;
+
+typedef struct dirpoint { //uses for faster dir access
+    filedir * node;
+    struct dirpoint * next;
+}dirpoint;
+
+typedef struct dirList {  //add all file, dir
+  struct dirpoint *head;
+  struct dirpoint *tail;
+  int size;
+} dirList;
+
+/**
+ * added for test
+*/
+// typedef struct pathpair { //get from log file
+//     char stamp[4096]; //first
+//     char oripath[4096]; //second
+// }pathpair;
+
+
 /////////////////// Log struct for .log file//////////
 
 typedef struct Log{
-	unsigned char md[MD5_DIGEST_LENGTH]; //get this when read .log file              if md1, absolute_path1 == md2 abpath2 -> they are same (-y)
+	// unsigned char md[MD5_DIGEST_LENGTH]; //get this when read .log file              if md1, absolute_path1 == md2 abpath2 -> they are same (-y)
 	char absolute_path_dir[MAXPATH]; //linked dir
 	int timestamp;          //home/backup/<timestamp>
 	char pure_path[MAXPATH];    //path til name          timestamp + pure_path == backup_path ((ex) > home/backup/<timestamp>/b/a.txt)
 	char purename[MAXDIR];       //-> absolute_path_dir + pure_path == absolute_path   if pure_path == purename -> file else file inside dir
 	struct Log * next;
 }log;
+
 
 log * logList; //linked list to save Logs
 
@@ -53,11 +95,339 @@ log ** searchbypath(char * absolute_path) { //absolute_path_dir
 /////////////////////vv pathpair for bfs ///////////
 
 typedef struct {
-	char first[MAXPATH];
-	char second[MAXPATH];
+	char first[MAXPATH];//?
+	char second[MAXPATH];//?
 }pathpair;
 
-///////////////queue
+
+///////////////menu, can be changed to dirlist and dirpoint?
+
+typedef struct menu {
+    filedir * node;
+    int num;
+    int lv;
+    struct menu * next;
+}menu;
+typedef struct menulist {
+    menu * head;
+    menu * rear;
+    int cnt;
+}menulist;
+
+
+
+///////////////////menulist start, maybe can change this to dirlist
+/// @brief //
+/// @return /
+menulist * init_menulist() {
+    menulist * temp = (menulist * )malloc(sizeof(menulist));
+    temp->cnt = 0;
+    // temp->lv = 0;
+    temp->head = NULL;
+    temp->rear = NULL;
+    return temp;
+}
+void push_menu(menulist * target, filedir * child, int lv) {
+    menu * temp = (menu*)malloc(sizeof(menu));
+    temp->node = child;
+    temp->lv = lv;
+    temp->num = target->cnt;
+    temp->next = NULL;
+    if(target->head == NULL) {
+        target->head = temp;
+        target->rear = temp;
+        target->cnt++;
+        return;
+    }
+    target->rear->next = temp;
+    target->rear = temp;
+    target->cnt++;
+}
+void destroy_all(menulist * target) {
+    menu * temp = target->head;
+    menu * prev;
+    while(temp) {
+        prev = temp;
+        temp = temp->next;
+        free(prev);
+    }
+    free(target);
+}
+
+
+
+///////////////backunode, filedir, dirpoint, dirlist utils//////////
+
+
+static pathpair pairs[10] = { //change to linkedlist
+    {"34566669", "home/ph/linuxhw/b"}, //home/ph/b/b.txt ~ t
+    {"34434434", "home/ph/linuxhw/b/새 폴더"}, //home/ph/b backukped to 2343434
+    {"34566666", "home/ph/linuxhw/b"}, //home/ph/b ~ to 2334356
+};
+
+/// @brief added for pairs test
+/// @param name 
+/// @param res 
+/// @return 1 : exists 0 : not exists, return res //
+int find_link(char * name, char * res) {
+    for (int i =0 ; i< 10; i++) { //10 = pairs cnt 
+        if (!strcmp(pairs[i].first, name)) {
+            strcpy(res, pairs[i].second);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void addbackup(filedir*t, backupNode * b);
+int show_all();
+dirList *mainDirList = NULL;
+void addDirList(filedir *t) { //중복 들어올 시 백업만 먹고 까버리기 필요  
+    // dirpoint * temp = mainDirList->head;
+    // dirpoint * point = (dirpoint*)malloc(sizeof(dirpoint));
+    // point->node = t;
+    // point->next = NULL;
+    // if (temp == NULL) { //empty
+    //     mainDirList->head = point;
+    //     mainDirList->tail = point;
+    //     mainDirList->size = 1;
+    //     return;
+    // }
+    // mainDirList->tail->next = point;
+    // mainDirList->tail = point;
+    // mainDirList->size++;
+    printf("called");
+    dirpoint * temp = mainDirList->head;
+    int flag = 0;
+    printf("adding %s\n", t->name);
+    if (mainDirList->size == 0) {
+        dirpoint *newp = (dirpoint*)malloc(sizeof(dirpoint));
+        newp->next = NULL;
+        newp->node = t;
+        mainDirList->head = newp;
+        mainDirList->tail = newp;
+        mainDirList->size++;
+        printf("ff");
+        return;
+    }
+    char t1[4096];
+    char t2[4096];
+    while(temp) {
+        memset(t1, 0,sizeof(t1));
+        memset(t2, 0,sizeof(t2));
+        printf(",");
+        // if (temp->node == NULL) {
+        //     printf("ffffffffff");
+        // }
+        strcpy(t1, temp->node->path);
+        strcpy(t2, t->path);
+        if (!strcmp(t1, t2)) { //dup
+            printf("1");
+            flag = 1;
+            break;
+        }
+        temp = temp -> next;
+    }
+    if (flag == 0) //new
+    {
+        printf("here");
+        dirpoint * newp = (dirpoint*)malloc(sizeof(dirpoint));
+        newp->next = NULL;
+        newp->node = t;
+        mainDirList->tail->next = newp;
+        mainDirList->tail = newp;
+        mainDirList->size++;
+        printf("success %s %s\n", t->name, t->path);
+    }
+    else { // dup, chk if it is file or dir
+        printf("???");
+        if (t->childscnt != -1) { // dir, 새 파일차일드만 투포인터로 갱신후 날리기
+            filedir * exists = temp->node;
+            filedir ** templist = (filedir**)malloc(sizeof(filedir*) * (exists->childscnt + t->childscnt + 2));
+            int rescnt = 0;
+            for (int i =0 ;i <= exists->childscnt; i++) {
+                printf("   %s\n", exists->childs[i]->path);
+            }
+            for (int i = 0; i <= t->childscnt; i++) {
+                printf("+++%s\n", t->childs[i]->path);
+            }
+            for (int i= 0, j= 0;;) {
+                if (i > exists->childscnt) {
+                    if (j > t->childscnt) break;
+                    templist[rescnt++] = t->childs[j++];
+                    continue;
+                }
+                if (j > t->childscnt) {
+                    if (i > exists->childscnt) break;
+                    templist[rescnt++] = exists->childs[i++];
+                    continue;
+                }
+                int res = strcmp(exists->childs[i]->path, t->childs[j]->path);
+                if (res > 0) {
+                    templist[rescnt++] = t->childs[j++];
+                }
+                if (res == 0) {
+                    templist[rescnt++] = exists->childs[i];
+                    i++;
+                    j++;
+                }
+                if (res < 0) {
+                    templist[rescnt++] = exists->childs[i++];
+                }
+            }
+            printf("DEV] two pointer res \n");
+            exists->childscnt = rescnt-1;
+            exists->childs = realloc(exists->childs, rescnt);
+            for (int i = 0; i< rescnt; i++) {
+                exists->childs[i] = templist[i];
+                printf("%s\n",templist[i]->name);
+            }
+            
+            /**
+             * TODO: add two pointer templist to original childs
+            */
+            addbackup(exists, t->head);//dir backup add
+            free(templist);
+            free(t->childs); ///////// HAZARD
+            // free(t);
+            //two pointer
+        }
+        else { // file, get new backup and discard filedir
+            filedir * exists = temp->node;
+            addbackup(exists, t->head);
+            free(t);
+            free(t->childs);
+        }
+    }
+    
+}
+void removeDirList(filedir *t) { //file -> 백업다 까버리기 dir -> 그냥삭제, -r bfs에서 재귀 삭제 담당하므로 상관x? 
+/**
+ * TODO: recursive remove dirlist 정의 필요?
+*/
+    dirpoint * temp;
+    dirpoint * prev;
+    temp = mainDirList->head;
+    while(temp) {
+        if (temp->node == t) break;
+        prev = temp;
+        temp = temp->next;
+    }
+    if (temp == NULL) {
+        fprintf(stderr, "fatal1");
+        exit(1);
+    }
+    if (prev == NULL) {
+        if (temp->node == NULL) {
+            mainDirList->head = NULL;
+            mainDirList->tail = NULL;
+            free(temp);
+            return;
+        }
+        mainDirList->head = mainDirList->head->next;
+        free(temp);
+        return;
+    }
+    if (temp -> node == NULL) {
+        mainDirList->tail = prev;
+        mainDirList->tail->next = NULL;
+        free(temp);
+        return;
+    }
+    prev->next = temp->next;
+    free(temp);
+}
+// void searchDirList(filedir *t) {
+//     dirpoint * temp = mainDirList->head;
+//     while(temp){ 
+//         if (temp->node == t)
+//     }
+// }
+
+void addfdchild(filedir * t, filedir * parent) { //must be added with parent dir
+    parent->childs[++parent->childscnt] = t;
+    // addDirList(t);
+    // if (t->childscnt != -1) //dir
+    // {
+    //     addDirList(t);
+    // }
+}
+void delfdchild(filedir * t, filedir * parent) { //dirs must be removed after inner childs r all dead
+    int flag = 0;
+    for (int i = 0; i<= parent->childscnt; i++) {
+        if (flag == 1) {
+            parent->childs[i-1] = parent->childs[i];
+        }
+        if (parent->childs[i] == t) {
+            flag = 1;
+            // free(t); ???????????
+        } 
+    }
+    /**
+     * TODO: realloc maybe?
+    */
+    parent->childs[parent->childscnt] = NULL; 
+    parent->childscnt--;
+    // if (t->childscnt != -1) { //dir
+    //     // removeDirList(t);
+    // }
+}
+filedir * initfd() {
+    filedir * fd = (filedir*)malloc(sizeof(filedir));
+    fd->head = NULL;
+    fd->childscnt = -1;
+    return fd;
+}
+backupNode * initbackup() {
+    backupNode * b = (backupNode * )malloc(sizeof(backupNode));
+    b->next = NULL;
+    return b;
+}
+void addbackup(filedir *t, backupNode * b) { //must call when make filedir file
+    if (t->head == NULL) {
+        t->head = b;
+        return;
+    }
+    backupNode * temp = t->head;
+    while(temp->next) {
+        temp = temp -> next;
+    }
+    temp->next = b;
+}
+void delbackup(filedir *t, char *stamp) {
+    backupNode *temp = t->head;
+    backupNode * prev;
+    while(temp) {
+        if (!strcmp(temp->stamp, stamp)) {
+            break;
+        }
+        prev = temp;
+        temp = temp -> next;
+    }
+    if (temp == NULL) {
+        exit(1);
+    }
+    if (prev == NULL) { //1 or first
+        if (temp->next == NULL) {
+            free(temp);
+            t->head = NULL;
+            return;
+        }
+        t->head = temp->next;
+        free(temp);
+        return;
+    }
+    if (temp ->next == NULL) {
+        prev -> next = NULL;
+        free(temp);
+        return;
+    }
+    prev->next = temp->next;
+    free(temp);
+    
+}
+
+/// @brief queue start//////////////
 typedef struct node {
 	struct node * next;
 	void * data;
@@ -146,8 +516,15 @@ queue * initQueue() {
 void destroyQueue(queue * target) {
 	free(target);
 }
+////////////////////////////////////
+
 
 //useful
+
+/// @brief 
+/// @param absolute_path 
+/// @param cnt 
+/// @return int that indicates last / location
 int return_last_name(char *absolute_path) {
     // char temp[4096];
     // sprintf(temp, "%s", absolute_path);
@@ -165,11 +542,44 @@ int return_last_name(char *absolute_path) {
 char * substr(char * target, int a, int b) {
     // printf("%d", strlen(target));
     // char temp[strlen(target) + 100];
-    char* temp = (char*)malloc(strlen(target) - 1);
-    return strncpy(temp, target + a, b - a);
+    char* temp = (char*)malloc(strlen(target) + 1);
+    strncpy(temp, target + a, b - a);
+    *(temp + b - a) = '\0';
+    return temp;
 }
 
 
+int get_slash_cnt(char * t) {
+    int res = 0;
+    for (int i=0 ;i < strlen(t); i++) {
+        if (t[i] == '/') res++;
+    }
+    return res;
+}
+// filedir ** search_target_dir(char * path) {
+//     dirpoint * temp = mainDirList ->head;
+//     filedir * root =    
+//     int minslash = get_slash_cnt(root->path);
+    
+// }
+char ** split(char * command, int *res) {
+    int cnt = 0;
+    printf("%s", command);
+    char ** temp = (char**)malloc(sizeof(char*));
+    char * arg = strtok(command, " ");
+
+    while(arg != NULL) {
+        // printf("arg : %s\n", arg);
+        temp = (char**)realloc(temp, sizeof(char*) * (cnt + 1));
+        temp[cnt] = (char *)malloc(sizeof(char) * strlen(arg) + 1);
+        strcpy(temp[cnt], arg);
+        arg = strtok(NULL, " ");
+        cnt++;
+    }
+    *res = cnt;
+
+    return temp;
+}
 
 /////////////////
 typedef struct {
@@ -214,9 +624,20 @@ void initBackupDir() {
 	if (access(logfile_path, F_OK))
 		creat(logfile_path, 0777);
 }
-void initBackupList() { //io log file
+void initBackupLog() { //io log file
 	//get log from logfile_path, 
 }
+void initDirList() {
+	mainDirList = (dirList*)malloc(sizeof(dirList));
+    mainDirList->head = NULL;
+    mainDirList->tail = NULL;
+    mainDirList->size = 0;
+}
+
+
+
+
+
 /////////////////// maker_zone (io zone) /////////////////////
 //makers gets fds as parameter, then do file io.
 //make log, copy(backup) of files...
@@ -251,11 +672,111 @@ int make_log(char* target_path, char*path, int mod) {
 	return 0;
 }
 
+void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in, it will cause err, but 
+    char curname[4096];
+    char nextpath[4096] = "";
+    char nextoripath[4096] = "";
+    struct dirent **namelist;
+    struct stat curstat;
+    int cnt;
+
+    queue q = *initQueue();
+    filedir* dir = initfd();//
+    backupNode * b = initbackup();
+    strcpy(b->backupPath, path);
+    strcpy(b->oripath, oripath);
+    strcpy(b->stamp, stamp);
+    
+    strcpy(dir->path, oripath);
+    // strcpy(dir->, path);
+    // printf("%d", strlen(oripath));
+    // printf(" %d", return_last_name(oripath));
+    // printf("-------%s\n", substr(oripath, return_last_name(oripath), strlen(oripath)));
+    sprintf(dir->name, "%s", substr(oripath, return_last_name(oripath) + 1, strlen(oripath))); // find name plz
+
+    addbackup(dir, b);
+    // addDirList(dir);
+    printf("%s || %s || %s\n", path,oripath, stamp);
+    q.push(&q, dir);
+    while(!q.empty(&q)) {
+        filedir * target = (filedir*)q.front(&q);
+        q.pop(&q);
+
+        if (lstat(target->head->backupPath, &curstat) < 0) exit(1);
+        if (S_ISREG(curstat.st_mode)) {
+            target->statbuf = curstat;
+            addDirList(target);
+            continue;
+        }
+        free(namelist);
+        if ((cnt = scandir(target->head->backupPath, &namelist, NULL, alphasort)) < 0) {
+            exit(1);
+        }
+       
+        // printf("running bfs");
+        // printf("%s %s\n", target->head->oripath, target->head->backupPath);
+        
+        target->statbuf = curstat;
+        // target->childscnt = cnt - 1;
+        target->childs = (filedir**)malloc(sizeof(filedir*) * cnt);
+        for (int i =0 ; i< cnt;i++) {
+            if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
+            // if (!strcmp(namelist[i]->d_name, "ssubak.log")) continue;
+            
+            sprintf(nextpath, "%s/%s", target->head->backupPath, namelist[i]->d_name); //it is adding sequence, so there is only 1 backup,so this code works
+            sprintf(nextoripath, "%s/%s", target->head->oripath, namelist[i]->d_name);
+            printf("%s %s\n", nextoripath, nextpath);
+            filedir * next = initfd();
+            backupNode * back = initbackup();
+            strcpy(next->path, nextoripath);
+            strcpy(back->oripath, nextoripath);
+            strcpy(back->backupPath, nextpath);
+            strcpy(back->stamp, stamp);
+            
+            strcpy(next->name, namelist[i]->d_name);
+            // strcpy(next->name, namelist[i]->d_name); 
+            // strcpy(next->path, nextoripath);
+            // strcpy(next->backupPath, nextpath);
+            if (lstat(nextpath, &curstat) < 0) {
+                continue;
+            }
+            next->statbuf = curstat;
+            back->statbuf = curstat;
+
+            addfdchild(next, target);
+            // show_all();
+            addbackup(next, back);
+            
+            q.push(&q, next);
+        }
+        addDirList(target);
+    }
+}
+
+
+
 //////////////////// worker zone ////////////////////
-//workers ex) backup remove... are here, all functional actions are 
-//occur here
-//workers only produce path, open file. throws opened fds from open() to
-//makers
+/**
+ * workers : ex) backup remove... are here, all functional actions are occur here
+ *          workers only produce path, open file. throws opened fds from open() to
+ *          makers
+ * 
+ * showers : are workers that made to only show things
+*/
+
+/// @brief make dfs menulist to select
+/// @param menus 
+/// @param target 
+/// @param lv 
+void dfs_worker(menulist * menus, filedir * target, int lv) {
+    for (int i=0 ;i <= target->childscnt; i++) {
+        filedir * child = target-> childs[i];
+        push_menu(menus, child, lv);
+        if (child->childscnt != -1) //dir;
+            dfs_worker(menus, child, lv + 1);
+    }
+}
+
 int bfs_file_worker(char * target_path, char * path, int mod) {
 	int fd, target_fd;
 	queue q;
@@ -340,9 +861,9 @@ int bfs_file_worker(char * target_path, char * path, int mod) {
 		}
 	}
 }
-int bfs_list_worker() { //bfs the backup file by searching log list
+// int bfs_list_worker() { //bfs the backup file by searching log list
 	
-}
+// }
 int do_backup(char * path, int mod) {
 	int fd;
 	int target_fd;
@@ -431,6 +952,112 @@ int do_backup(char * path, int mod) {
 	return 0;
 }
 
+
+/// @brief use bfs_fs_maker() and make filesystem
+/// @return succeed?
+int load_backup(){ 
+    char *path = "/home/backup";
+    char curname[4096];
+    char origin[4096];
+    struct dirent ** namelist;
+    int cnt;
+    if ((cnt = scandir(path, &namelist, NULL, alphasort)) < 0) return -1;
+    printf("%d\n", cnt);
+    for (int i =0 ; i < cnt; i++) {
+        if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
+        sprintf(curname, "%s/%s", path, namelist[i]->d_name);
+        printf("%s is on progress\n", curname);
+        int res = find_link(namelist[i]->d_name, origin);
+        
+        if (!res) {
+            printf("fked");
+            continue;
+        }
+        
+        bfs_fs_maker(curname, origin, namelist[i]->d_name);
+    }
+    return 1;
+}
+
+
+//////////////////showers, similar to do but for showing things
+/// @brief show all things in mainDirList
+/// @return --
+int show_all() {
+    dirpoint *temp = mainDirList->head;
+    printf("\n\n");
+    while(temp) {
+        filedir * target = temp->node;
+        printf("%s\n",target->name);
+        printf("path : %s\n", target->path);
+        printf("backups : ");
+        backupNode * b = target->head;
+        while(b) {
+            printf(" %s,", b->stamp);
+            b = b ->next;
+        }
+        printf("\n");
+        printf("childs : ");
+        for (int i = 0; i <= target->childscnt; i++) {
+            printf("%s,", target->childs[i]->name);
+        }
+        printf("\n");
+        printf("size : %ld\n", target->statbuf.st_size);
+        temp = temp->next;
+    }
+    return 1;
+}
+
+/**
+ * need to call in show_list_command
+*/
+void remove_func(int argc, char*argv[]);
+void recover_func(int argc, char*argv[]);
+/**
+ * TODO: change function form needed...
+*/
+int show_list_command(char * path) { //4 : list
+    // menulist * templist = (menulist *)malloc(sizeof(menulist));
+    menulist * templist = init_menulist();
+    char * targetpath = getenv("HOME"); // /home/ph/
+    if (path) targetpath = realpath(path, NULL);
+    // filedir * target = search_target_dir(targetpath);
+    filedir * target = mainDirList->head->node;
+    
+    push_menu(templist, target, 0); //segfault
+    dfs_worker(templist, target, 0);
+    
+    //print templist of target
+    menu * temp = templist->head;
+    while(temp) {
+        filedir * target = temp->node;
+        printf("%d %s\n", temp->num, target->name);
+        temp = temp->next;
+    }
+    printf("\n>>");
+    //scanf command
+    char command[2048];
+    int arglen = 0;
+    scanf("%[^\n]s", command);
+    // printf("%s", command);
+    char ** args = split(command, &arglen); //utils function, strtok all and return args
+    
+    if (arglen < 2) return -1;
+    if (!strcmp(args[0], "rm")) {     //call remove_func with args
+        
+    }
+    else if (!strcmp(args[0], "rc")) { //call recover_func with args
+
+    }
+    else if (!strcmp(args[0], "vi")) {
+		
+    }
+    else { //err
+        fprintf(stderr, "fucked internal command");
+    }
+    destroy_all(templist);
+}
+
 ///////////////////vvvvvvv/ func zone vvvvvv/////////////////////
 //slices commands and manage bad inputs
 /**
@@ -483,6 +1110,7 @@ void recover_func() {
 }
 void list_func() {
 	printf("hello list");
+	show_list_command(NULL);
 }
 void help_func() {
 	printf("hello help");
@@ -493,7 +1121,12 @@ int main(int argc, char * argv[]) {
 	int i = 0;
 	initEnum();	
 	initBackupDir();
-	initBackupList();
+	initBackupLog(); //get backuplog and make pathpair or sth
+
+	//make mock filesystem in program and save it to mainDirList
+	initDirList();
+	load_backup();
+	show_all();//show result of load_backup,
 
 	//for (i = 0; i < argc; i++) {
 	//	printf("%s\n", argv[i]);

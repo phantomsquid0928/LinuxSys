@@ -111,9 +111,9 @@ void addDirList(filedir *t) { //중복 들어올 시 백업만 먹고 까버리�
         memset(t1, 0,sizeof(t1));
         memset(t2, 0,sizeof(t2));
         printf(",");
-        if (temp->node == NULL) {
-            printf("ffffffffff");
-        }
+        // if (temp->node == NULL) {
+        //     printf("ffffffffff");
+        // }
         strcpy(t1, temp->node->path);
         strcpy(t2, t->path);
         if (!strcmp(t1, t2)) { //dup
@@ -255,7 +255,7 @@ void delfdchild(filedir * t, filedir * parent) { //dirs must be removed after in
         }
         if (parent->childs[i] == t) {
             flag = 1;
-            free(t);
+            // free(t); ???????????
         } 
     }
     /**
@@ -526,7 +526,6 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
         addDirList(target);
     }
 }
-
 int load_backup(){
     char *path = "/home/backup";
     char curname[4096];
@@ -551,6 +550,7 @@ int load_backup(){
     }
     return 1;
 }
+
 int show_all() {
     dirpoint *temp = mainDirList->head;
     printf("\n\n");
@@ -575,6 +575,148 @@ int show_all() {
     }
     return 1;
 }
+
+typedef struct menu {
+    filedir * node;
+    int num;
+    int lv;
+    struct menu * next;
+}menu;
+typedef struct menulist {
+    menu * head;
+    menu * rear;
+    int cnt;
+}menulist;
+
+menulist * init_menulist() {
+    menulist * temp = (menulist * )malloc(sizeof(menulist));
+    temp->cnt = 0;
+    // temp->lv = 0;
+    temp->head = NULL;
+    temp->rear = NULL;
+    return temp;
+}
+void push_menu(menulist * target, filedir * child, int lv) {
+    menu * temp = (menu*)malloc(sizeof(menu));
+    temp->node = child;
+    temp->lv = lv;
+    temp->num = target->cnt;
+    temp->next = NULL;
+    if(target->head == NULL) {
+        target->head = temp;
+        target->rear = temp;
+        target->cnt++;
+        return;
+    }
+    target->rear->next = temp;
+    target->rear = temp;
+    target->cnt++;
+}
+void destroy_all(menulist * target) {
+    menu * temp = target->head;
+    menu * prev;
+    while(temp) {
+        prev = temp;
+        temp = temp->next;
+        free(prev);
+    }
+    free(target);
+}
+
+int get_slash_cnt(char * t) {
+    int res = 0;
+    for (int i=0 ;i < strlen(t); i++) {
+        if (t[i] == '/') res++;
+    }
+    return res;
+}
+// filedir ** search_target_dir(char * path) {
+//     dirpoint * temp = mainDirList ->head;
+//     filedir * root =    
+//     int minslash = get_slash_cnt(root->path);
+    
+// }
+char ** split(char * command, int *res) {
+    int cnt = 0;
+    printf("%s", command);
+    char ** temp = (char**)malloc(sizeof(char*));
+    char * arg = strtok(command, " ");
+
+    while(arg != NULL) {
+        // printf("arg : %s\n", arg);
+        temp = (char**)realloc(temp, sizeof(char*) * (cnt + 1));
+        temp[cnt] = (char *)malloc(sizeof(char) * strlen(arg) + 1);
+        strcpy(temp[cnt], arg);
+        arg = strtok(NULL, " ");
+        cnt++;
+    }
+    *res = cnt;
+
+    return temp;
+}
+void dfs_worker(menulist * menus, filedir * target, int lv) {
+    for (int i=0 ;i <= target->childscnt; i++) {
+        filedir * child = target-> childs[i];
+        push_menu(menus, child, lv);
+        if (child->childscnt != -1) //dir;
+            dfs_worker(menus, child, lv + 1);
+    }
+}
+int show_list_command(char * path) { //4 : list
+    // menulist * templist = (menulist *)malloc(sizeof(menulist));
+    menulist * templist = init_menulist();
+    char * targetpath = getenv("HOME"); // /home/ph/
+    if (path) targetpath = realpath(path, NULL);
+    // filedir * target = search_target_dir(targetpath);
+    filedir * target = mainDirList->head->node;
+    
+    push_menu(templist, target, 0); //segfault
+    dfs_worker(templist, target, 0);
+    
+    //print templist of target
+    menu * temp = templist->head;
+    while(temp) {
+        filedir * target = temp->node;
+        printf("%d %s\n", temp->num, target->name);
+        temp = temp->next;
+    }
+    printf("\n>>");
+    //scanf command
+    char command[2048];
+    int arglen = 0;
+    scanf("%[^\n]s", command);
+    // printf("%s", command);
+    char ** args = split(command, &arglen); //utils function, strtok all and return args
+    
+    if (arglen < 2) return -1;
+    if (!strcmp(args[0], "rm")) {
+        
+    }
+    else if (!strcmp(args[0], "rc")) {
+
+    }
+    else if (!strcmp(args[0], "vi")) {
+
+
+    }
+    else { //err
+        fprintf(stderr, "fucked internal command");
+    }
+    destroy_all(templist);
+}
+int remove_command(char * path) {
+    // filedir * target = search_target_dir(path);
+    filedir * target = NULL;
+    if (target->childscnt != -1) { //dir
+
+    }
+    else { //file
+        // filedir * parent_dir = get_parent();
+
+        // delfdchild(target, parent_dir); //remove all
+
+    }
+}
 int main() {
     mainDirList = (dirList*)malloc(sizeof(dirList));
     mainDirList->head = NULL;
@@ -582,10 +724,11 @@ int main() {
     mainDirList->size = 0;
     int i =load_backup();
     printf("\n\n");
-    while(1) {
-        char input[4000];
-        scanf("%s", input);
-        if (!strcmp(input, "exit")) break;
-        if (!strcmp(input, "show")) show_all();
-    }
+    // while(1) {
+    //     char input[4000];
+    //     scanf("%s", input);
+    //     if (!strcmp(input, "exit")) break;
+    //     if (!strcmp(input, "show")) show_all();
+    // }
+    show_list_command(NULL);
 }
