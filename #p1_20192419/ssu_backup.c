@@ -339,6 +339,15 @@ void removeDirList(filedir *t) { //file -> 백업다 까버리기 dir -> 그냥�
 // }
 
 void addfdchild(filedir * t, filedir * parent) { //must be added with parent dir
+	dirpoint * temp = mainDirList->head;
+	while(temp) {
+		filedir * exist = temp->node;
+		if (!strcmp(t->path, exist->path)) {
+			parent->childs[++parent->childscnt] = temp->node;
+			return;
+		}
+		temp = temp->next;
+	}
     parent->childs[++parent->childscnt] = t;
     // addDirList(t);
     // if (t->childscnt != -1) //dir
@@ -736,15 +745,88 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
     }
 }
 
-int remove_backup(backupNode * t) {
-	printf("removed %s!", t->stamp);
-}
-int restore_backup(backupNode * t, char * path, int mod) { //if mod & 8 != 0 -> path is not null
-	if ((mod & 8) != 0) {
-		printf("restored %s to new dir %s", t->stamp, path);
-		return 1;
+int clear_empty_dirs(char * dir) {
+	char *stop = "/home/backup";
+	char temp[MAXPATH];
+	struct dirent ** namelist;
+	int res = 0;
+	strcpy(temp, dir);
+	while(1) {
+		int cnt = 0;
+		
+		printf("chekcing %s is empty dir\n", temp);
+		if (!strcmp(stop, temp)) break;
+		if ((cnt = scandir(temp, &namelist, NULL, alphasort)) < 0) return -1;
+		if (cnt == 2) rmdir(temp);
+		strcpy(temp, substr(temp, 0, return_last_name(temp)));
 	}
-	printf("restored %s!", t->stamp);
+	
+}
+/**
+ * TODO: call make_log, 
+*/
+int remove_backup(backupNode * t, int funcmod) {
+	// remove(t->backupPath);
+	char *upperdir = substr(t->backupPath, 0, return_last_name(t->backupPath));
+	int cnt;
+	// struct dirent **namelist;
+	printf("target remove path : %s\n", t->backupPath);
+	printf("target remove dir : %s\n ", upperdir);
+	printf("removed %s!\n", t->stamp);
+	clear_empty_dirs(upperdir);
+	// if ((cnt = scandir(upperdir, &namelist, NULL, alphasort)) < 0) {
+	// 	fprintf(stderr, "remove error!");
+	// }
+	// printf("left ; %d", cnt - 2);
+	// if (cnt == 2) rmdir(upperdir);
+	// printf("removed %s!", t->stamp);
+}
+/// @brief just restore file from backup(no bfs), bfs is called by outer caller(bfs_worker_mod)
+/// @param t backupnode
+/// @param path if mod has 8, then path is newpath
+/// @param root root of the path, t->oripath - root = relpath
+/// @param mod 
+/// @return 
+int restore_backup(backupNode * t, char * path, char * root, int mod) { //if mod & 8 != 0 -> path is not null
+	char restorepath[MAXPATH]; 
+	if ((mod & 8) != 0) {
+		strcpy(restorepath, path);
+		printf("restored %s to new dir %s", t->stamp, path);
+	}
+	else {
+		strcpy(restorepath, t->oripath);
+	}
+	int fd, tofd;
+	if ((fd = open(t->backupPath, O_RDONLY)) < 0) {
+		fprintf(stderr, "open error");
+		exit(1);
+	}
+	//make dirs
+	char relpath[MAXPATH];
+	strcpy(relpath, substr(path, strlen(root), strlen(path)));
+	int res = 0;
+	char ** args = split(relpath, "/", &res);
+	char temp[MAXPATH];
+	strcpy(temp, root);
+	if (strstr(relpath, ".")) res--; //file
+
+	for (int i = 0; i< res; i++) {
+		if (access(temp, F_OK)) mkdir(temp, 0644);
+		strcat(temp, args[i]);
+	}
+
+	if ((tofd = open(restorepath, O_TRUNC|O_CREAT|O_WRONLY)) < 0) {
+		fprintf(stderr, "failed to open restore path");
+		exit(1);
+	}
+	int len;
+	char buf[1024];
+	while((len = read(fd, buf, 1024)) > 0) {
+		write(tofd, buf, len);
+	}
+
+	//chk if parent dir is fkin empty
+	printf("restored %s!", t->stamp); 
 }
 
 //////////////////// worker(special util) zone ////////////////////
@@ -871,10 +953,11 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 	//assume target_path is good_path
 	queue q = *initQueue();
 	// filedir * head;
-	char temp[MAXPATH];
+	char temp[MAXPATH]; //root path
 	strcpy(temp, target_path);
 	filedir * head = search_from_dirlist(temp);
 	if (head == NULL) return -1;
+
 	q.push(&q, head);
 	while(!q.empty(&q)) {
 		filedir * t = q.front(&q);
@@ -882,8 +965,8 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 		printf("target : %s", t->name);
 		if (t->childscnt == -1) {//file
 			if (t->head->next == NULL) {//only 1 backup exists
-				remove_backup(t->head);
-				if (funcmod) restore_backup(t->head, path, mod);
+				if (funcmod) restore_backup(t->head, path, temp, mod);
+				remove_backup(t->head, funcmod);
 				continue;
 			}
 			backupNode * backups = t->head;
@@ -896,7 +979,7 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 			while(backups) {
 				i++;
 				if ((mod & 4) != 0 && funcmod == 0) //remove -a option
-					remove_backup(backups);
+					remove_backup(backups, funcmod);
 				if ((mod & 4) == 0) {
 					printf("%d    %s    %ldbytes\n", i, backups->stamp, backups->statbuf.st_size);
 				}
@@ -914,8 +997,9 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 					if (i == input) break;
 					backups = backups->next;
 				}
-				remove_backup(backups);
-				if (funcmod) restore_backup(prev, path, mod);
+				
+				if (funcmod) restore_backup(backups, path, temp, mod);
+				remove_backup(backups, funcmod);
 				continue;
 			}
 
@@ -923,8 +1007,8 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 			if ((mod & 4) != 0 && funcmod == 0) //remove -a option
 				continue;
 			if ((mod & 4) != 0 && funcmod == 1) {//recover -l option
-				remove_backup(prev);
-				restore_backup(prev, path, mod);
+				restore_backup(prev, path, temp, mod);
+				remove_backup(prev, funcmod);
 			}
 			
 			continue;
