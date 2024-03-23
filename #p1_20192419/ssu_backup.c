@@ -7,6 +7,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
+#include <time.h>
 
 #include <openssl/md5.h>
 
@@ -21,7 +22,7 @@ static const char *commandList[] = {
 	"backup", "remove", "recover", "list", "help",
 };
 static const char *logModList[] = {
-	"backuped to", "removed by", "recovered to", "already backuped to", "not changed with"
+	" backuped to ", " removed by ", " recovered to ", " already backuped to ", " not changed with "
 };
 
 
@@ -41,6 +42,7 @@ typedef struct filedir {
     struct stat statbuf;
     // char backupPath[MAXPATH];
     backupNode * head;
+	backupNode * rear;
     struct filedir ** childs;
     int childscnt; //file : -1, dir : many
 }filedir;
@@ -56,7 +58,7 @@ typedef struct dirList {  //add all file, dir
   int size;
 } dirList;
 
-/**
+/**f
  * added for test
 */
 // typedef struct pathpair { //get from log file
@@ -65,41 +67,102 @@ typedef struct dirList {  //add all file, dir
 // }pathpair;
 
 
-/////////////////// Log struct for .log file//////////
+// /////////////////// Log struct for .log file//////////
 
-typedef struct Log{
-	// unsigned char md[MD5_DIGEST_LENGTH]; //get this when read .log file              if md1, absolute_path1 == md2 abpath2 -> they are same (-y)
-	char absolute_path_dir[MAXPATH]; //linked dir
-	int timestamp;          //home/backup/<timestamp>
-	char pure_path[MAXPATH];    //path til name          timestamp + pure_path == backup_path ((ex) > home/backup/<timestamp>/b/a.txt)
-	char purename[MAXDIR];       //-> absolute_path_dir + pure_path == absolute_path   if pure_path == purename -> file else file inside dir
-	struct Log * next;
-}log;
+// typedef struct Log{
+// 	// unsigned char md[MD5_DIGEST_LENGTH]; //get this when read .log file              if md1, absolute_path1 == md2 abpath2 -> they are same (-y)
+// 	char absolute_path_dir[MAXPATH]; //linked dir
+// 	int timestamp;          //home/backup/<timestamp>
+// 	char pure_path[MAXPATH];    //path til name          timestamp + pure_path == backup_path ((ex) > home/backup/<timestamp>/b/a.txt)
+// 	char purename[MAXDIR];       //-> absolute_path_dir + pure_path == absolute_path   if pure_path == purename -> file else file inside dir
+// 	struct Log * next;
+// }log;
 
 
-log * logList; //linked list to save Logs
+// log * logList; //linked list to save Logs
 
-log * initLog() {
+// log * initLog() {
 
-}
+// }
 
-log ** searchbystamp(int timestamp) {
+// log ** searchbystamp(int timestamp) {
 
-}
-log ** searchbypath(char * absolute_path) { //absolute_path_dir
+// }
+// log ** searchbypath(char * absolute_path) { //absolute_path_dir
 
-}
+// }
 
 
 
 /////////////////////vv pathpair for bfs ///////////
 
+char ** split(char * command, char * spliter, int *res);
+char * substr(char * target, int a, int b);
+
 typedef struct {
 	char first[MAXPATH];//?
 	char second[MAXPATH];//?
 }pathpair;
+typedef struct log {
+	pathpair * node;
+	struct log * next;
+}log;
+log * loghead;
+void search_and_addLog(pathpair * target) {
+	log * head = loghead;
+	while(head) { //find same timestamp log, then change path to parent one
+		pathpair * t = head->node;
+		if (!strcmp(t->first, target->first)) {//same log, save only parent dir
+			int res1;
+			int res2;
+			char ** arg1 = split(t->second, "/", &res1);
+			char ** arg2 = split(target->second, "/", &res2);
+			int minv = res1 > res2 ? res2 : res1;
+			char temp[MAXPATH];
+			memset(temp, 0, sizeof(temp));
+			for (int i = 0;i < minv; i++) {
+				printf("comparing : %s %s\n", arg1[i], arg2[i]);
+				if (!strcmp(arg1[i], arg2[i])) {
+					strcat(temp, "/");
+					printf("%d\n", strlen(arg1[i]));
+					strncat(temp, arg1[i], strlen(arg1[i]));
+					continue;
+				}
+				break;
+			}
+			printf("cat res : %s\n", temp);
+			// if (strstr(temp, ".") != NULL) {//file
+			// 	char * parent = substr(temp, 0, return_last_name(temp));
+			// }
+			strcpy(t->second, temp);
+			return;
+		}
+		head = head ->next;
+	}
 
-
+	//no same log, add it
+	log * temp = (log *)malloc(sizeof(log));
+	temp->node = target;
+	temp->next = NULL;
+	if (loghead == NULL) {
+		loghead = temp;
+		return;
+	}
+	temp->next = loghead;
+	loghead = temp;
+}
+int searchLog(char * name, char * res) {
+	log * temp = loghead;
+	while(temp) {
+		pathpair * t = temp->node;
+		if (!strcmp(t->first, name)) {
+			strcpy(res, t->second);
+			return 1;
+		}
+		temp = temp->next;
+	}
+	return 0;
+}
 ///////////////menu, can be changed to dirlist and dirpoint?
 
 typedef struct menu {
@@ -182,6 +245,79 @@ void addbackup(filedir*t, backupNode * b);
 int show_all();
 dirList *mainDirList = NULL;
 
+void find_lost_link(filedir * t) {
+	dirpoint * temp = mainDirList->head;
+	
+	char * parent_path = substr(t->path, 0, return_last_name(t->path));
+
+	while(temp) {
+		filedir * node = temp->node;
+
+		char * nodespar = substr(node->path, 0, return_last_name(node->path));
+		if (!strcmp(nodespar, t->path)) { //found lost child dir of t
+			int chk = 0;
+			for (int i = 0; i <= t->childscnt; i++) {
+				if (!strcmp(t->name, t->childs[i])) {
+					chk = 1;
+					break;
+				}
+			}
+			if (chk == 0) { //not in list
+				printf("fllsfsfsf");
+				//add child by alphasort... o(n)
+				// t->childscnt++;
+				t->childs = (char**)realloc(t->childs, sizeof(char*) * (t->childscnt + 2));
+				if (strcmp(t->childs[t->childscnt]->path, node->path) < 0) {
+					t->childs[t->childscnt + 1] = node;
+				}
+				else {
+					for (int i = t->childscnt; i >= 0; i--) {
+						t->childs[i + 1] = t->childs[i];
+						if (strcmp(t->childs[i]->path, node->path) > 0) {
+							t->childs[i] = node;
+							break;
+						}
+						if (i == 0) t->childs[i] = node;
+					}
+				}
+			
+				t->childscnt++;
+			}
+		}
+		if (!strcmp(parent_path, node->path)) { //found lost chlids of node
+			printf("2;l22222\n");
+			//add child on parent
+			// node->childscnt++;
+			int chk = 0;
+			for (int i = 0; i <= node->childscnt; i++) {
+				if (!strcmp(node->childs[i]->name, t->name)) {
+					chk = 1;
+					break;
+				}
+				// printf("   _f__%s\n", node->childs[i]->name);
+			}
+			if (chk == 0) { //not in list
+				node->childs = (char**)realloc(node->childs, sizeof(char*) * (t->childscnt + 2));
+				if (strcmp(node->childs[node->childscnt]->path, t->path) < 0) {
+					node->childs[node->childscnt + 1] = t;
+				}
+				else {
+					for (int i = node->childscnt; i >= 0; i--) {
+						node->childs[i + 1] = node->childs[i];
+						if (strcmp(node->childs[i]->path, t->path) > 0) {
+							node->childs[i] = t;
+							break;
+						}
+						if (i == 0) node->childs[i] = t;
+					}
+				}
+				node->childscnt++;
+			}
+			
+		}
+		temp = temp->next;
+	}
+}
 /// @brief 
 /// @param t 
 /// @return filedir that changed filedir *, : if there is dup, then older one returns, if not, returns same filedir from param
@@ -220,13 +356,24 @@ filedir * addDirList(filedir *t) { //중복 들어올 시 백업만 먹고 까�
     }
     if (flag == 0) //new
     {
-        printf("here");
+        printf("NEW");
         dirpoint * newp = (dirpoint*)malloc(sizeof(dirpoint));
         newp->next = NULL;
         newp->node = t;
         mainDirList->tail->next = newp;
         mainDirList->tail = newp;
         mainDirList->size++;
+		/**
+		 * TODO: /#p1_20192419 들어왓는데 a.txt 만 커맨드로 받은 상태에서 #p1_20192419/b 디렉토리 잇다면 연결해야함
+		 * 		반대로 -d 옵션 후 안에 dir을 그냥 추가시 ->부모 링크 없음
+		 * 		부모가 내 (dir)링크 없는 경우, 내(dir)가 자식링크 없는경우
+		 * 		무결성검사필요
+		*/
+		if (t->childscnt != -1) {
+			printf("lost?");
+			find_lost_link(t);
+		}
+		 //strcmp 로 alphabetic add 필요
         printf("success %s %s\n", t->name, t->path);
 		return t;
     }
@@ -271,15 +418,13 @@ filedir * addDirList(filedir *t) { //중복 들어올 시 백업만 먹고 까�
             }
             printf("DEV] two pointer res \n");
             exists->childscnt = rescnt-1;
-            exists->childs = realloc(exists->childs, rescnt);
+            exists->childs = realloc(exists->childs, sizeof(char *) * rescnt);
             for (int i = 0; i< rescnt; i++) {
                 exists->childs[i] = templist[i];
                 printf("%s : %p\n",templist[i]->name, templist[i]);
             }
             
-            /**
-             * TODO: add two pointer templist to original childs
-            */
+        
             addbackup(exists, t->head);//add new backup
             // free(templist);
             // free(t->childs); ///////// HAZARD
@@ -296,9 +441,7 @@ filedir * addDirList(filedir *t) { //중복 들어올 시 백업만 먹고 까�
     
 }
 void removeDirList(filedir *t) { //file -> 백업다 까버리기 dir -> 그냥삭제, -r bfs에서 재귀 삭제 담당하므로 상관x? 
-/**
- * TODO: recursive remove dirlist 정의 필요?
-*/
+
     dirpoint * temp;
     dirpoint * prev;
     temp = mainDirList->head;
@@ -366,9 +509,7 @@ void delfdchild(filedir * t, filedir * parent) { //dirs must be removed after in
             // free(t); ???????????
         } 
     }
-    /**
-     * TODO: realloc maybe?
-    */
+ 
     parent->childs[parent->childscnt] = NULL; 
     parent->childscnt--;
     // if (t->childscnt != -1) { //dir
@@ -378,6 +519,7 @@ void delfdchild(filedir * t, filedir * parent) { //dirs must be removed after in
 filedir * initfd() {
     filedir * fd = (filedir*)malloc(sizeof(filedir));
     fd->head = NULL;
+	fd->rear = NULL;
     fd->childscnt = -1;
     return fd;
 }
@@ -389,13 +531,11 @@ backupNode * initbackup() {
 void addbackup(filedir *t, backupNode * b) { //must call when make filedir file
     if (t->head == NULL) {
         t->head = b;
+		t->rear = b;
         return;
     }
-    backupNode * temp = t->head;
-    while(temp->next) {
-        temp = temp -> next;
-    }
-    temp->next = b;
+    t->rear->next = b;
+	t->rear = b;
 }
 void delbackup(filedir *t, char *stamp) {
     backupNode *temp = t->head;
@@ -518,6 +658,14 @@ queue * initQueue() {
 }
 void destroyQueue(queue * target) {
 	free(target);
+	target->head = NULL;
+	target->rear = NULL;
+
+	target->clear = NULL;
+	target->empty = NULL;
+	target->front = NULL;
+	target->push = NULL;
+	target->pop = NULL;
 }
 ////////////////////////////////////
 
@@ -551,8 +699,10 @@ char * substr(char * target, int a, int b) {
     return temp;
 }
 int get_slash_cnt(char * t) {
+	char temp[MAXPATH];
+	strcpy(temp, t);
     int res = 0;
-    for (int i=0 ;i < strlen(t); i++) {
+    for (int i=0 ;i < strlen(temp); i++) {
         if (t[i] == '/') res++;
     }
     return res;
@@ -566,7 +716,7 @@ char ** split(char * command, char * spliter, int *res) {
     while(arg != NULL) {
         // printf("arg : %s\n", arg);
         temp = (char**)realloc(temp, sizeof(char*) * (cnt + 1));
-        temp[cnt] = (char *)malloc(sizeof(char) * strlen(arg) + 1);
+        temp[cnt] = (char *)malloc(sizeof(char) * (strlen(arg) + 1));
         strcpy(temp[cnt], arg);
         arg = strtok(NULL, spliter);
         cnt++;
@@ -628,7 +778,13 @@ void initDirList() {
     mainDirList->tail = NULL;
     mainDirList->size = 0;
 }
-
+void check_valid_runloc() {
+	char * cwd = getcwd(NULL, 0);
+	if (strstr(cwd, "/home") == NULL || get_slash_cnt(cwd) < 2) {
+		fprintf(stderr, "this command must be ran on user (/home/<username>) above");
+		exit(1);
+	}
+}
 
 /////////////////// maker_zone (io zone) /////////////////////
 //makers gets fds as parameter, then do file io.
@@ -653,16 +809,25 @@ int make_backup(int targetfd, int fd) {
 //mod 2 : recovered to
 //mod 3 : already backuped to
 //mod 4 : not changed with
-//TODO need more parameter for struct Log, expecially timestamp?
-int make_log(char* target_path, char*path, int mod) {
-	char log[10000];
-	sprintf(log, "\"%s\" %s \"%s\"", path, logModList[mod], target_path);
-	printf("%s\n", log);
-	if (mod < 3) { //log file io, add linked list
 
+int make_log(char* target_path, char*path, char * stamp, int mod) { //0 backup, 1 remove, 2 recover, 3not backuped, 4 not changed
+	char log[MAXPATH * 3];
+	sprintf(log, "\"%s\"%s\"%s\"", target_path, logModList[mod], path);
+	printf("%s\n", log);
+	sprintf(log, "%s : \"%s\"%s\"%s\"", stamp, target_path, logModList[mod], path);
+	if (mod < 3) { //log file io, add linked list
+		FILE * fd;
+		if ((fd = fopen("/home/backup/ssubak.log", "a+")) == NULL) {
+			fprintf(stderr, "log error, cannot open file");
+			exit(1);
+		}
+		int size;
+		fprintf(fd, "%s\n", log);
 	}
+	
 	return 0;
 }
+
 
 void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in, it will cause err, but 
     char curname[4096];
@@ -700,13 +865,14 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
             addDirList(target);
             continue;
         }
-        free(namelist);
+		// if (!S_ISDIR(curstat.st_mode)) continue;
+        // free(namelist);
         if ((cnt = scandir(target->head->backupPath, &namelist, NULL, alphasort)) < 0) {
             exit(1);
         }
        
-        // printf("running bfs");
-        // printf("%s %s\n", target->head->oripath, target->head->backupPath);
+        printf("running bfs");
+        printf("%s %s\n", target->head->oripath, target->head->backupPath);
         
         target->statbuf = curstat;
         // target->childscnt = cnt - 1;
@@ -743,9 +909,50 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
         }
         addDirList(target);
     }
+	// destroyQueue(&q);
 }
 
-int clear_empty_dirs(char * dir) {
+
+//useful
+// int mkdirs(char * path) {// 
+// 	char * top = getenv("HOME"); ///home/ph
+
+/// @brief KILL ALL BELOW PATH AND ITSELF HAHA, can be used when backup is ruined
+/// @param path file or dir path
+/// @return succeed
+int rmdirs(char * dir) { 
+	struct stat statbuf;
+	// char temp[MAXPATH];
+	// strcpy(temp, dir);
+	int cnt;
+	struct dirent **namelist;
+	// queue q = *initQueue();
+	// pathpair *p = (pathpair*)malloc(sizeof(pathpair));
+	// strcpy(p->first, dir);
+	// strcpy(p->second, "");
+	// q.push(&q, p);
+	
+	if (lstat(dir, &statbuf) < 0) {
+		return -1;
+	}
+	if (S_ISREG(statbuf.st_mode) || S_ISLNK(statbuf.st_mode)) {
+		remove(dir);
+	}
+	if (!S_ISDIR(statbuf.st_mode)) return 0;
+	if ((cnt = scandir(dir, &namelist, NULL, alphasort)) < 0) {
+		return -1;
+	}
+	for (int i= 0;i < cnt; i++) {
+		if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
+		char nextpath[MAXPATH];
+		sprintf(nextpath, "%s/%s", dir, namelist[i]->d_name);
+		rmdirs(nextpath);
+	}
+	rmdir(dir);
+}
+// }
+//useful
+int clear_empty_dirs(char * dir) {	
 	char *stop = "/home/backup";
 	char temp[MAXPATH];
 	struct dirent ** namelist;
@@ -763,34 +970,41 @@ int clear_empty_dirs(char * dir) {
 	
 }
 /**
- * TODO: call make_log, 
+ * TODO: if all things are completed arged next : pathpair log
+ * 		then remove annotation on remove(t->)
+ * 
 */
-int remove_backup(backupNode * t, int funcmod) {
-	// remove(t->backupPath);
+int remove_backup(backupNode * t, char * actiontime, int funcmod) {
+	if (remove(t->backupPath)) {
+		fprintf(stderr, "error while removing target %s\n", t->backupPath);
+	}
 	char *upperdir = substr(t->backupPath, 0, return_last_name(t->backupPath));
 	int cnt;
-	// struct dirent **namelist;
+	
 	printf("target remove path : %s\n", t->backupPath);
 	printf("target remove dir : %s\n ", upperdir);
 	printf("removed %s!\n", t->stamp);
+	// if (!funcmod) make_log(t->backupPath, t->oripath, actiontime, 1); //need sth change
 	clear_empty_dirs(upperdir);
-	// if ((cnt = scandir(upperdir, &namelist, NULL, alphasort)) < 0) {
-	// 	fprintf(stderr, "remove error!");
-	// }
-	// printf("left ; %d", cnt - 2);
-	// if (cnt == 2) rmdir(upperdir);
-	// printf("removed %s!", t->stamp);
 }
-/// @brief just restore file from backup(no bfs), bfs is called by outer caller(bfs_worker_mod)
-/// @param t backupnode
+/// @brief just restore file from backup(no bfs), bfs is called by outer caller(bfs_worker_mockfs), only file comes in
+/// @param t backupnode that FILE !!!111
 /// @param path if mod has 8, then path is newpath
 /// @param root root of the path, t->oripath - root = relpath
 /// @param mod 
 /// @return 
-int restore_backup(backupNode * t, char * path, char * root, int mod) { //if mod & 8 != 0 -> path is not null
-	char restorepath[MAXPATH]; 
+int restore_backup(backupNode * t, char * path, char * root, char * actiontime, int mod) { //if mod & 8 != 0 -> path is not null, path is dir or file
+	char restorepath[MAXPATH];
+	
+	char backup_path[MAXPATH];
+	strcpy(backup_path, t->backupPath);
+	printf(":::::::; %s ::::::::\n", backup_path);
+	char * filename = substr(backup_path, return_last_name(backup_path), strlen(backup_path));
+
+	printf("%s", filename);
 	if ((mod & 8) != 0) {
 		strcpy(restorepath, path);
+		strcat(restorepath, filename);
 		printf("restored %s to new dir %s", t->stamp, path);
 	}
 	else {
@@ -801,20 +1015,26 @@ int restore_backup(backupNode * t, char * path, char * root, int mod) { //if mod
 		fprintf(stderr, "open error");
 		exit(1);
 	}
-	//make dirs
-	char relpath[MAXPATH];
-	strcpy(relpath, substr(path, strlen(root), strlen(path)));
+	//mkdir
+	char relpath[MAXDIR];
+	printf("restore : %s\n", restorepath);
+	printf("root : %s\n", root);
+	printf("::::%ld:::::", strlen(root));
+	char *temp1 = substr(restorepath, strlen(root), strlen(restorepath)); //crash
+	printf("::::%s ::::", temp1);
+	strcpy(relpath, temp1);
 	int res = 0;
 	char ** args = split(relpath, "/", &res);
 	char temp[MAXPATH];
 	strcpy(temp, root);
-	if (strstr(relpath, ".")) res--; //file
+	// if (strstr(relpath, ".")) res--; //file
 
-	for (int i = 0; i< res; i++) {
-		if (access(temp, F_OK)) mkdir(temp, 0644);
+	for (int i = 0; i< res - 1; i++) {
+		if (access(temp, F_OK)) mkdir(temp, 0777);
 		strcat(temp, args[i]);
 	}
-
+	
+	printf("restore location: %s\n", restorepath);
 	if ((tofd = open(restorepath, O_TRUNC|O_CREAT|O_WRONLY)) < 0) {
 		fprintf(stderr, "failed to open restore path");
 		exit(1);
@@ -824,9 +1044,13 @@ int restore_backup(backupNode * t, char * path, char * root, int mod) { //if mod
 	while((len = read(fd, buf, 1024)) > 0) {
 		write(tofd, buf, len);
 	}
+	/**
+	 * TODO: md5 checking
+	*/
+	make_log(t->backupPath, t->oripath, actiontime, 2);
 
-	//chk if parent dir is fkin empty
-	printf("restored %s!", t->stamp); 
+	// //chk if parent dir is fkin empty
+	// printf("restored %s!", t->stamp); 
 }
 
 //////////////////// worker(special util) zone ////////////////////
@@ -836,12 +1060,43 @@ int restore_backup(backupNode * t, char * path, char * root, int mod) { //if mod
  * workers : ex) backup remove... are here, all functional actions are occur here
  *          workers only produce path, open file. throws opened fds from open() to
  *          makers
- * 
+ * gets
  * show ers : are workers that made to only show things
  * search  : search target files from maindirlist
  * compare_md5 : md5 compare util
 */
 
+
+int compare_md5(char * path, char * path2);
+int compare_md5_backups(char * path);
+
+/// @brief TIMESTAMP PPAKURI
+/// @return 12 len timestamp
+char *getDate() {
+	char *date = (char *)malloc(sizeof(char) * 14);
+	time_t timer;
+	struct tm *t;
+
+	timer = time(NULL);	
+	t = localtime(&timer);
+
+  sprintf(date, "%02d%02d%02d%02d%02d%02d",t->tm_year %100, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+  
+  return date;
+}
+char * getHome() {
+	char * cwd = getcwd(NULL, 0);
+	int res;
+	char ** args = split(cwd, "/", &res);
+	char * home = (char*)malloc(sizeof(char) * (MAXPATH));
+	strcpy(home, "/");
+	strcat(home, args[0]);
+	strcat(home, "/");
+	strcat(home, args[1]);
+	free(cwd);
+	free(args);
+	return home;
+}
 /// @brief make dfs menulist to select
 /// @param menus 
 /// @param target 
@@ -855,100 +1110,114 @@ void dfs_worker(menulist * menus, filedir * target, int lv) {
     }
 }
 
-int bfs_worker_backup(char * target_path, char * path, int mod) {//mod not needed, only for backup
-	int fd, target_fd;
-	queue q;
-	q = *initQueue();// cpp abstract code
-	char tempname[MAXDIR];
-	char temppath[MAXPATH];
-	char tempTargetPath[MAXPATH];
-	struct stat tempstat;
-	struct dirent * dentry;
+// int bfs_worker_backup(char * target_path, char * path, char * stamp, int mod) {//mod not needed, only for backup
+// 	int fd, target_fd;
+// 	queue q;
+// 	q = *initQueue();// cpp abstract code
+// 	char tempname[MAXDIR];
+// 	char temppath[MAXPATH];
+// 	char tempTargetPath[MAXPATH];
+// 	struct stat tempstat;
+// 	// struct dirent * dentry;
+// 	struct dirent ** namelist;
 
-	pathpair pair;
+// 	pathpair pair;
 	
-	mkdir(target_path, 0777);
-	sprintf(pair.first, "%s", path);
-    sprintf(pair.second, "%s", target_path);	
-	q.push(&q, &pair);
+// 	mkdir(target_path, 0777);
+// 	sprintf(pair.first, "%s", path);
+//     sprintf(pair.second, "%s", target_path);	
+// 	q.push(&q, &pair);
 
-	while(!q.empty(&q)) {
-		pathpair* temp = (pathpair *)q.front(&q);
-		char* curpath = temp->first;
-		char* target_curpath = temp->second;
-		DIR * x; 
-		printf("watching: %s, %s\n", curpath, target_curpath);
-		if ((x = opendir(curpath)) == NULL || chdir(curpath) == -1) {
-			printf("fked\n");
-			return -12; //bfs err
-		}
-		q.pop(&q);
-		while((dentry = readdir(x)) != NULL) {
-			if (dentry -> d_ino == 0)
-				continue;
-			memcpy(tempname, dentry->d_name, MAXDIR);
-			if (!strcmp(tempname, ".") || !strcmp(tempname, ".."))
-				continue;
-			memset(temppath, 0, sizeof(temppath));
-			memset(tempTargetPath, 0, sizeof(tempTargetPath));
-			if (stat(tempname, &tempstat) == -1) {
-				printf("fked2\n");
-				return -13; //stat err
-			}
+// 	while(!q.empty(&q)) {
+// 		pathpair* temp = (pathpair *)q.front(&q);
+// 		char* curpath = temp->first;
+// 		char* target_curpath = temp->second;
+
+// 		// DIR * x; 
+// 		printf("watching: %s, %s\n", curpath, target_curpath);
+// 		if ((x = opendir(curpath)) == NULL || chdir(curpath) == -1) {
+// 			printf("fked\n");
+// 			return -12; //bfs err
+// 		}
+// 		q.pop(&q);
+// 		while((dentry = readdir(x)) != NULL) {
+// 			if (dentry -> d_ino == 0)
+// 				continue;
+// 			memcpy(tempname, dentry->d_name, MAXDIR);
+// 			if (!strcmp(tempname, ".") || !strcmp(tempname, ".."))
+// 				continue;
+// 			memset(temppath, 0, sizeof(temppath));
+// 			memset(tempTargetPath, 0, sizeof(tempTargetPath));
+// 			if (stat(tempname, &tempstat) == -1) {
+// 				printf("fked2\n");
+// 				return -13; //stat err
+// 			}
 			
-			sprintf(temppath, "%s/%s", curpath, tempname); //path
-			sprintf(tempTargetPath, "%s/%s", target_curpath, tempname); //backup 
-			printf("spreading \n %s \n%s\n\n", temppath, tempTargetPath);
-			// strcat(target_path, "/");
-			// strcat(target_path, tempname);
-			if (S_ISREG(tempstat.st_mode)) {
+// 			sprintf(temppath, "%s/%s", curpath, tempname); //path
+// 			sprintf(tempTargetPath, "%s/%s", target_curpath, tempname); //backup 
+// 			printf("spreading \n %s \n%s\n\n", temppath, tempTargetPath);
+// 			// strcat(target_path, "/");
+// 			// strcat(target_path, tempname);
+// 			if (S_ISREG(tempstat.st_mode)) {
 				
-				//save file in backup
-				if ((fd = open(temppath, O_RDONLY)) < 0) { //path need modi
-					printf(";\n");
-					return -7; //open er
-				}
-				/**
-				 *  TODO: mod y for existing check here, same on above. 
-				 */
-				if ((target_fd = open(tempTargetPath, O_WRONLY | O_CREAT, 0777)) < 0) {
-					printf("=2\n");
-					return -2; //open er, target_path also need mod , no sudo
-				}
-				if (make_backup(target_fd, fd) < 0) { //change func by func
-					close(fd);
-					close(target_fd);
-					// remove();
-					printf("error");
-					return -4;
-				}
-				if (make_log(temppath, tempTargetPath, mod) < 0) {
-					return -5; //log error
-				}
-				close(fd);
-				close(target_fd);
-			}
-			if (S_ISDIR(tempstat.st_mode) && (mod & 2) != 0) {
-				//mkdir in backup
-				mkdir(tempTargetPath, 0777);
-				pathpair temp2;
-				sprintf(temp2.first, "%s", temppath);
-				sprintf(temp2.second, "%s", tempTargetPath);
-				q.push(&q, &temp2);
-			}
-		}
-	}
-}
+// 				//save file in backup
+// 				// int chk = compare_md5_backups(temppath);
+// 				// if (chk == 1 && (mod & 4) == 0) {
+// 				// 	if (make_log(temppath, tempTargetPath, stamp, 3) < 0) { //md5
+// 				// 		return -5; //log error
+// 				// 	}
+// 				// 	continue;
+// 				// }
+				
+// 				if ((fd = open(temppath, O_RDONLY)) < 0) { //path need modi
+// 					printf(";\n");
+// 					return -7; //open er
+// 				}
+			
+// 				if ((target_fd = open(tempTargetPath, O_WRONLY | O_CREAT, 0777)) < 0) {
+// 					printf("=2\n");
+// 					fprintf(stderr, "maybe no sudo");
+// 					return -2; //open er, target_path also need mod , no sudo
+// 				}
+// 				if (make_backup(target_fd, fd) < 0) { //change func by func
+// 					close(fd);
+// 					close(target_fd);
+// 					// remove();
+// 					printf("error");
+// 					return -4;
+// 				}
+// 				if (make_log(temppath, tempTargetPath, stamp, 0) < 0) { //md5
+// 					return -5; //log error
+// 				}
+// 				close(fd);
+// 				close(target_fd);
+// 			}
+// 			if (S_ISDIR(tempstat.st_mode) && (mod & 2) != 0) {
+// 				//mkdir in backup
+// 				mkdir(tempTargetPath, 0777);
+// 				pathpair temp2;
+// 				sprintf(temp2.first, "%s", temppath);
+// 				sprintf(temp2.second, "%s", tempTargetPath);
+// 				q.push(&q, &temp2);
+// 			}
+// 		}
+// 	}
+// }
 
 
 filedir * search_from_dirlist(char * goodpath);
+
+/**
+ * TODO: 324 get return from restore, : fail or suc
+ * 		if suc, remove if fail no remove
+*/
 /// @brief get file / dir path, do backup or recover by funcmod, controls actions by mod
 /// @param target_path from path
 /// @param path   to path, when remove, it is null/ when recover and mod has -n, then has new path
 /// @param funcmod 0 remove, 1 recover
 /// @param mod     0 nothin, &1 -d, &2 -r, &4 -l or -a, &8  -n
 /// @return succeed?
-int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //funcmod 0 remove only 1 recover, 
+int bfs_worker_mockfs(char * target_path, char * path, int funcmod, int mod) { //funcmod 0 remove only 1 recover, 
 	//mod1 then path is not null
 	//assume target_path is good_path
 	queue q = *initQueue();
@@ -957,6 +1226,8 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 	strcpy(temp, target_path);
 	filedir * head = search_from_dirlist(temp);
 	if (head == NULL) return -1;
+	// char * stamp = "34434434"; //timestamp
+	char * stamp = getDate();
 
 	q.push(&q, head);
 	while(!q.empty(&q)) {
@@ -965,8 +1236,8 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 		printf("target : %s", t->name);
 		if (t->childscnt == -1) {//file
 			if (t->head->next == NULL) {//only 1 backup exists
-				if (funcmod) restore_backup(t->head, path, temp, mod);
-				remove_backup(t->head, funcmod);
+				if (funcmod) restore_backup(t->head, path, temp, stamp, mod);
+				remove_backup(t->head, stamp, funcmod);
 				continue;
 			}
 			backupNode * backups = t->head;
@@ -979,7 +1250,7 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 			while(backups) {
 				i++;
 				if ((mod & 4) != 0 && funcmod == 0) //remove -a option
-					remove_backup(backups, funcmod);
+					remove_backup(backups, stamp, funcmod);
 				if ((mod & 4) == 0) {
 					printf("%d    %s    %ldbytes\n", i, backups->stamp, backups->statbuf.st_size);
 				}
@@ -990,6 +1261,7 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 				int input = 0;
 				printf(">>");
 				scanf("%d", &input);
+				if (input == 0) exit(0);
 				backups = t->head;
 				i = 0;
 				while(backups) {
@@ -998,8 +1270,8 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 					backups = backups->next;
 				}
 				
-				if (funcmod) restore_backup(backups, path, temp, mod);
-				remove_backup(backups, funcmod);
+				if (funcmod) restore_backup(backups, path, temp, stamp, mod);
+				remove_backup(backups, stamp, funcmod);
 				continue;
 			}
 
@@ -1007,111 +1279,202 @@ int bfs_worker_mod(char * target_path, char * path, int funcmod, int mod) { //fu
 			if ((mod & 4) != 0 && funcmod == 0) //remove -a option
 				continue;
 			if ((mod & 4) != 0 && funcmod == 1) {//recover -l option
-				restore_backup(prev, path, temp, mod);
-				remove_backup(prev, funcmod);
+				restore_backup(prev, path, temp, stamp, mod);
+				remove_backup(prev, stamp, funcmod);
 			}
 			
 			continue;
 		}
 		//dir
-		printf("fffsfsf\n\n");
 		for (int i = 0; i <= t->childscnt; i++) {
 			if (t->childs[i]->childscnt != -1) {//dir
 				if ((mod & 2) == 0) continue;
 			}
 			q.push(&q, t->childs[i]);
 		}
-
 	}
+	// destroyQueue(&q);
 }
-int do_backup(char * path, int mod) {
+
+/// @brief contains bfs, can manage file / dir backup
+/// @param path must be good path, which means return from realpath()
+/// @param mod backup action mod, mod |= 1 : -d    |= 2 : -r    |= 4 : -y
+/// @return 0 succeed minusts -> errocode
+int bfs_worker_realfs(char * path, int mod) { 
 	int fd;
 	int target_fd;
-	char * time = "34434434";
-	// char * time = "34566666";
-	// char * time = "34566669";
-	char cwd[1024];
-	struct stat info;
-	struct dirent *dentry;
-	DIR *dirp;
+	int cnt = 0;
+	char * stamp = getDate(); //stamp
 
-	if (getcwd(cwd, 1024) == NULL)
-		return -3;
-	if (lstat(path, &info) < 0) {
-		return -1; //lstat error, file/dir not exists
-	}
-	//make path for backup
-	char target_path[MAXPATH];
-	//get time
+	struct stat statbuf;
+	struct dirent ** namelist;
 
-	//tokenize provided path : /a/b/c.txt -> c.txt 
-	//to get pure file name
-	char temp[MAXPATH];
-	sprintf(temp, "%s", path);
-	char *ptr = strtok(temp, "/");
-	char *tmp;
-	char purename[MAXDIR];
-	sprintf(purename, "%s", substr(temp, return_last_name(path) + 1, strlen(path)));
-	printf("\n-------%s--------\n", purename);
-	// if (ptr == NULL) {
-	// 	sprintf(purename, "%s", ptr);
-	// }
-	// else {
-	// 	while (1) {
-	// 		tmp = ptr;
-	// 		ptr = strtok(NULL, "/");
-	// 		if (ptr == NULL) break;
-	// 	}
-	// 	sprintf(purename, "%s", tmp);
-	// }
-	//sprintf(target_path, "%s/%s/%s", backup_path, time, purename);
-	strcpy(target_path, backup_path);
-	strcat(target_path, "/");
-	strcat(target_path, time);
-	printf("%s", target_path);
-	if (access(target_path, F_OK))
-		mkdir(target_path, 0777);
 	
-	//printf("%d\n", strlen(target_path));
-	printf("::::::::path : %s\n", path);
-	if (S_ISREG(info.st_mode)) { //file
-		strcat(target_path, "/");
-		strcat(target_path, purename);
-		//home/backup/<time>/a.txt
-		printf("%s\n", target_path);
-		if ((mod & 3) == 1 || (mod & 3) == 2) { //-d -r flag but file
-			return -10; //flag error
-		}
-		if ((fd = open(path, O_RDONLY)) < 0)
-			return -7; //open error
-		if ((target_fd = open(target_path, O_WRONLY|O_CREAT, 0777)) < 0) {
-			printf("errno: %d", errno);
-			return -2; //open error, no sudo
-		}
-		if (make_backup(target_fd, fd) < 0) {
-			close(target_fd);
-			close(fd);
-			remove(target_path);
-			return -4; //make_backup error
-		}
-		//call logger
-		if (make_log(path, target_path, 0) < 0) //TODO : get path from fd is needed
-			return -5; //logger error
+	char backup_path[MAXPATH];
+	char linked_dir_path[MAXPATH]; // -> if path is txt, then it is parent dir, dir then dir itself
+	//path below is ROOT
+	//CAN BE USED IN RMDIRS TO KILL ALL
+	char root_path[MAXPATH];
+
+	char purename[MAXDIR];
+
+
+	
+	sprintf(purename, "%s", substr(path, return_last_name(path) + 1, strlen(path)));
+	printf("\n-------%s--------\n", purename);
+
+	sprintf(backup_path, "%s/%s%s", "/home/backup", stamp, (strstr(path, ".") == NULL) ? "" : strcat("/", purename)); //
+	sprintf(root_path, "%s/%s", "/home/backup", stamp);
+	//file -> /home/backup/stamp/a.txt
+	//dir -> /home/backup/stamp/
+	sprintf(linked_dir_path, "%s", substr(path, 0, (strstr(path, ".") == NULL) ? strlen(path) : return_last_name(path)));
+	//file -> b/a.txt
+	//dir -> b
+	printf("backup : %s\n root : %s \n linked : %s\n", backup_path, root_path, linked_dir_path);
+	if (mkdir(root_path, 0777) < 0) {
+		fprintf(stderr, "NO SUDO");
+		exit(1);
 	}
-	else if (S_ISDIR(info.st_mode)) { //path is dir
-		if ((mod & 3) != 1 && (mod & 3) != 2) 
- 			return -11; //flag error 2
-		//if ((fd = open(path, O_RDONLY)) < 0) return -2; //open error
-		printf("bfs called");
-		return bfs_worker_backup(target_path, path, mod);
+	
+
+	queue q = *initQueue();
+	pathpair *p = (pathpair*)malloc(sizeof(pathpair));
+	sprintf(p->first, "%s", backup_path); // ./<stamp>/purename
+	sprintf(p->second, "%s", path);      // file or dir
+	q.push(&q, p);
+	while(!q.empty(&q)) {
+		pathpair *pt = q.front(&q);
+		char * bpath = pt->first;   //backup
+		char * lpath = pt->second;  //ori
+		printf("watching : %s %s ", bpath, lpath);
+		q.pop(&q);
+		if (lstat(lpath, &statbuf) < 0) {
+			printf("lstat");
+			//rollback all
+			rmdirs(root_path);
+			exit(1);
+		}
+		if (S_ISREG(statbuf.st_mode)) {//backup
+			if ((fd = open(lpath, O_RDONLY)) < 0) {
+				rmdirs(root_path);
+				fprintf(stderr, "open error");
+				exit(1);
+				//rollback
+			}
+			if ((target_fd = open(bpath, O_WRONLY | O_CREAT, 0666)) < 0) {
+				rmdirs(root_path);
+				fprintf(stderr, "open error");
+				exit(1);
+				//rollback
+			}
+			int chk = compare_md5_backups(path);
+			if (chk == -1) {
+				rmdirs(root_path);
+				fprintf(stderr, "md5 chk error");
+				exit(1);
+			}
+			if (chk == 1 && (mod & 4) == 0) { //same file exists but no -y
+				if (make_log(lpath, bpath, stamp, 3) < 0) { //md5
+					rmdirs(root_path);
+					fprintf(stderr, "open error");
+					exit(1);
+					//rollback
+					return -5;
+				}
+				continue;
+			}
+			if (make_backup(target_fd, fd) < 0) {
+				rmdirs(root_path);
+				fprintf(stderr, "open error");
+				exit(1);
+				//rollback
+			}
+			if (make_log(lpath, bpath, stamp, 0) < 0) {
+				rmdirs(root_path);
+				fprintf(stderr, "open error");
+				exit(1);
+				//rollback
+				return -1;
+			}
+			continue;
+		}
+		
+		if (!S_ISDIR(statbuf.st_mode)) continue;
+		if (mkdir(bpath, 0777) < 0) {
+			if (errno != EEXIST) {
+				printf("mkdir");
+				rmdirs(root_path);
+				fprintf(stderr, "open error");
+				exit(1);
+				//rmdirs(root_path);
+			}
+		}
+		if ((cnt = scandir(lpath, &namelist, NULL, alphasort)) < 0) {
+			printf("scan");
+			rmdirs(root_path);
+			fprintf(stderr, "open error");
+			exit(1);
+			//rollback all, rmdirs will be best. provide /home/backup/<stamp> dir
+		}
+		for (int i = 0;i < cnt; i++) {
+			if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
+			char next_bpath[MAXPATH];
+			char next_lpath[MAXPATH];
+			sprintf(next_bpath, "%s/%s", bpath, namelist[i]->d_name);
+			sprintf(next_lpath, "%s/%s", lpath, namelist[i]->d_name);
+			if (lstat(next_lpath, &statbuf) < 0) {
+				printf("lstats2");
+				rmdirs(root_path);
+				fprintf(stderr, "open error");
+				exit(1);
+				//rollback
+			}
+			if ((mod & 2) == 0 && S_ISDIR(statbuf.st_mode))  {// -r not exists
+				continue;
+			}
+			pathpair * nextp = (pathpair*)malloc(sizeof(pathpair));
+			strcpy(nextp->first, next_bpath);
+			strcpy(nextp->second, next_lpath);
+
+			q.push(&q, nextp);
+		}
 	}
-	/*if ((fd = open(path, )) < 0) {
-		return -1;
-	}*/
-	chdir(cwd);  //make working dir points orig dir may be useless
-	return 0;
+	// destroyQueue(&q);
 }
 
+int load_log() {
+	char *path = "/home/backup/ssubak.log";
+	FILE * fp;
+	if ((fp = fopen(path, "rt")) == NULL) {
+		fprintf(stderr, "got error while opening log");
+		exit(1);
+	}
+	
+	while(1) {
+		char buf[3 * MAXPATH];
+		int read = fscanf(fp, "%[^\n]\n", buf);
+		if (read == EOF) break;
+		// printf("log : %s\n", buf);
+		
+		int rs;
+		char ** args = split(buf, "\"", &rs);
+		if (!strcmp(args[2], logModList[0])) { //backuped to
+			// printf("%s %s", args[0], args[2]);
+			int padding = strlen("/home/backup/");
+			char * stamp = substr(args[3], padding, padding + 12); //12
+			
+			printf("%s %s\n", stamp, args[1]);
+			pathpair * temp = (pathpair *)malloc(sizeof(pathpair));
+
+			strcpy(temp->first, stamp);
+			char * parent = substr(args[1], 0, return_last_name(args[1]));
+			strcpy(temp->second, parent);
+
+			printf("saved!\n");
+			search_and_addLog(temp);
+		}
+	}
+}
 
 /// @brief use bfs_fs_maker() and make filesystem
 /// @return succeed?
@@ -1127,7 +1490,8 @@ int load_backup(){
         if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
         sprintf(curname, "%s/%s", path, namelist[i]->d_name);
         printf("%s is on progress\n", curname);
-        int res = find_link(namelist[i]->d_name, origin);
+        // int res = find_link(namelist[i]->d_name, origin);
+		int res = searchLog(namelist[i]->d_name, origin);
         
         if (!res) {
             printf("fked");
@@ -1136,7 +1500,7 @@ int load_backup(){
         
         bfs_fs_maker(curname, origin, namelist[i]->d_name);
 		printf("\n\n\n\n");
-		show_all();
+		// show_all();
     }
     return 1;
 }
@@ -1149,6 +1513,7 @@ int show_all() {
     dirpoint *temp = mainDirList->head;
     printf("\n\n");
     while(temp) {
+		printf("\n");
         filedir * target = temp->node;
         printf("%s : %p\n",target->name, target);
         printf("path : %s\n", target->path);
@@ -1162,7 +1527,7 @@ int show_all() {
 		printf("childscnt : %d\n", target->childscnt);
         printf("childs : ");
         for (int i = 0; i <= target->childscnt; i++) {
-            printf("%s: %p,", target->childs[i]->name, target->childs[i]);
+            printf("%s: %p, ", target->childs[i]->name, target->childs[i]);
 
         }
         printf("\n");
@@ -1172,8 +1537,46 @@ int show_all() {
     return 1;
 }
 
-int get_good_path(char * p, char * goodpath) {
+int show_log() {
+	log * temp = loghead;
+	while(temp) {
+		pathpair * node = temp->node;
+		printf("%s %s\n", node->first, node->second);
+		temp = temp->next;
+	}
+}
+
+void show_backup_help() {
+	printf("\t> backup <PATH> [OPTION]...\n\t");
+	printf("  <none> : backup file if <PATH> is file\n\t");
+	printf("  -d : backup files in directory if <PATH> is directory\n\t");
+	printf("  -r : backup files in directory recursive if <PATH> is directory\n\t");
+	printf("  -y : backup file although already backuped\n");
+}
+void show_remove_help() {
+	printf("\t> remove <PATH> [OPTION]...\n\t");
+	printf("  <none> : remove backuped file if <PATH> is file\n\t");
+	printf("  -d : remove backuped files in directory if <PATH> is directory\n\t");
+	printf("  -r : remove backuped files in directory recursive if <PATH> is directory\n\t");
+	printf("  -a : remove all backuped files\n");
+}
+void show_recover_help() {
+	printf("\t> recover <PATH> [OPTION]...\n\t");
+	printf("  <none> : recover backuped file if <PATH> is file\n\t");
+	printf("  -d : recover backuped files in directory if <PATH> is directory\n\t");
+	printf("  -r : recover backuped files in directory recursive if <PATH> is directory\n\t");
+	printf("  -l : recover latest backuped file\n\t");
+	printf("  -n <NEW_PATH> : recover backuped file with new path\n");
+}
+void show_list_help() {
+	printf("\t> list [PATH]\n\t");
+	printf("  >> rm <INDEX> [OPTION]...\n\t");
+	printf("  >> rc <INDEX> [OPTION]...\n\t");
+	printf("  >> vi(m) <INDEX>\n");
+}
+
 	//purify path
+int get_good_path(char * p, char * goodpath) {
 	int mod = 0;
 	char abstract_path[MAXPATH];
 	strcpy(abstract_path, p);
@@ -1214,7 +1617,7 @@ int get_good_path(char * p, char * goodpath) {
 			printf("HERE");
 			strcpy(respath, p);
 		}
-		char * res = strstr(respath, getenv("HOME"));
+		char * res = strstr(respath, getHome());
 		if (res == NULL || (int)(res - respath) != 0) {
 			return -1;
 		}
@@ -1223,7 +1626,11 @@ int get_good_path(char * p, char * goodpath) {
 		return 0;
 	}
 	else {
-		char * res = strstr(truepath, getenv("HOME"));
+		printf("truepath\n");
+		printf("%s %s\n", truepath, getHome());
+		char * home = getHome();
+		char * res = strstr(truepath, home);
+		printf("%p %p\n", res, truepath);
 		if (res == NULL || (int)(res - truepath) != 0) {
 			printf("bad");
 			return -1;
@@ -1237,47 +1644,112 @@ int get_good_path(char * p, char * goodpath) {
 /**
  * need to call in show_list_command
 */
-void remove_func(int argc, char*argv[]);
-void recover_func(int argc, char*argv[]);
+int remove_func(int argc, char*argv[]);
+int recover_func(int argc, char*argv[]);
 /**
  * TODO: change function form needed...
 */
+filedir * search_target_dir(char * targetpath) {
+	dirpoint * temp = mainDirList->head;
+	dirpoint * top = mainDirList->head;
+	filedir * res = NULL;
+	int flag = 0;
+	while(temp) {
+		filedir * node = temp->node;
+		if (targetpath != NULL && !strcmp(targetpath, node->path)) {
+			res = node;
+			flag = 1;
+			break;
+		}
+		if (get_slash_cnt(top->node->path) > get_slash_cnt(node->path)) {
+			top = temp;
+		}
+		temp = temp->next;
+	}
+	if (flag) {
+		printf("returning res");
+		return res;
+	}
+	else {
+		printf("returning top");
+		return top->node; // returns head of fs
+	}
+	
+}
 int show_list_command(char * path) { //4 : list
     // menulist * templist = (menulist *)malloc(sizeof(menulist));
     menulist * templist = init_menulist();
-	char * curpath = getcwd(NULL, 0);
-    char * targetpath = getenv("HOME"); // /home/ph/
-    if (path) targetpath = realpath(path, NULL);
-    // filedir * target = search_target_dir(targetpath);
-    filedir * target = mainDirList->head->node;
-    
+    char * targetpath = NULL; // /home/ph/ 
+    if (path) {
+		targetpath = realpath(path, NULL);
+		if (targetpath == NULL) {
+			fprintf(stderr, "bad path");
+			exit(1);
+		}
+		char * ff = strstr(targetpath, getHome());
+		if(ff == NULL || (int)(ff - targetpath) != 0) { // parent of home/ph or other root path
+			fprintf(stderr, "invalid path");
+			exit(1);
+		}
+	}
+    filedir * target = search_target_dir(targetpath);
+	if (mainDirList->head == NULL) {
+		printf("empty!");
+		return -1;
+	}
+	if (target == NULL) {
+		printf("fe");
+		return -1;
+	}
+
+    // filedir * target = mainDirList->head->node;
+	printf("selected : %s\n", target->name);
     push_menu(templist, target, 0); //segfault
     dfs_worker(templist, target, 0);
     
-    //print templist of target
+    //print templist of target (tree)
     menu * temp = templist->head;
-    while(temp) {
+	printf("%d %s\n", temp->num, temp->node->path);
+	temp = temp->next;
+    while(temp -> next) {
         filedir * target = temp->node;
-        printf("%d %s\n", temp->num, target->name);
+        printf("%d ", temp->num);
+		for (int i =0 ; i< temp->lv; i++) printf("| ");
+		if (target->childscnt == -1)
+			printf("├ %.20s%s  %10ldbytes\n", target->name, target->rear->stamp, target->rear->statbuf.st_size);
+		else {
+			printf("├ %s\n", target->name);
+		}
         temp = temp->next;
     }
+	printf("%d ", temp->num);
+	for (int i =0 ; i< temp->lv; i++) printf("| ");
+	printf("└ %.20s%s   %10ld\n", temp->node->name, temp->node->rear->stamp, temp->node->rear->statbuf.st_size);
+
+
     printf("\n>>");
     //scanf command
     char command[2048];
     int arglen = 0;
     scanf("%[^\n]s", command);
     // printf("%s", command);
-    char ** args = split(command, " ", &arglen); //utils function, strtok all and return args
-    
-    if (arglen < 2) return -1;
-    if (!strcmp(args[0], "rm")) {     //call remove_func with args
-        
-    }
-    else if (!strcmp(args[0], "rc")) { //call recover_func with args
+    char ** argstemp = split(command, " ", &arglen); //utils function, strtok all and return args
+    char ** args = (char**)malloc(sizeof(char *) * (arglen + 1));
+	args[0] = "";
+	for (int i =1 ;i < arglen + 1; i++) {
+		args[i] = argstemp[i - 1];
+	}
 
+
+    if (arglen < 2) return -1;
+    if (!strcmp(args[1], "rm")) {     //call remove_func with args
+        remove_func(arglen + 1, args);
     }
-    else if (!strcmp(args[0], "vi")) {
-		
+    else if (!strcmp(args[1], "rc")) { //call recover_func with args
+		recover_func(arglen + 1, args);
+    }
+    else if (!strcmp(args[1], "vi")) {
+		//exec fork vi
     }
     else { //err
         fprintf(stderr, "fucked internal command");
@@ -1297,7 +1769,74 @@ filedir * search_from_dirlist(char * goodpath) {
 	return NULL;
 }
 
+int md5(char *target_path, char *hash_result)
+{
+	FILE *fp;
+	unsigned char hash[MD5_DIGEST_LENGTH];
+	unsigned char buffer[16384];
+	int bytes = 0;
+	MD5_CTX md5;
 
+	if ((fp = fopen(target_path, "rb")) == NULL){
+		printf("ERROR: fopen error for %s\n", target_path);
+		return 1;
+	}
+
+	MD5_Init(&md5);
+
+	while ((bytes = fread(buffer, 1, 16383, fp)) != 0)
+		MD5_Update(&md5, buffer, bytes);
+	
+	MD5_Final(hash, &md5);
+
+	for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
+		sprintf(hash_result + (i * 2), "%02x", hash[i]);
+	hash_result[32] = 0;
+
+	fclose(fp);
+
+	return 0;
+}
+
+/// @brief compare md5
+/// @param path 
+/// @param path2 
+/// @return 0 -> same file 1 -> diff file
+int compare_md5(char * path, char * path2) {
+	char hash[33];
+	char hash2[33];
+	if (md5(path, hash)) {
+		return -1;
+	}
+	if (md5(path2, hash2)) {
+		return -1;
+	}
+	if (!strcmp(hash, hash2)) {
+		return 0;
+	}
+	return 1;
+}
+/// @brief check whether there is backup that has same path, file
+/// @param path : must be real
+/// @return 0 no backup that same 1 : there exists backup that has same
+int compare_md5_backups(char * path) {
+	filedir * exists = search_from_dirlist(path);
+	if (exists != NULL) {
+		backupNode * temp = exists->head;
+		int chk = 0;
+		while(temp) {
+			int compres = 0;
+			if ((compres = compare_md5(temp->backupPath, path)) < 0) {
+				return -1;
+			}
+			if (compres == 0) {//same file
+				return 1;
+			}
+			temp = temp->next;
+		}
+	}
+	return 0;
+}
 
 
 
@@ -1309,6 +1848,7 @@ filedir * search_from_dirlist(char * goodpath) {
 /**
 * backup -d
 */
+
 void backup_func(int argc, char * argv[]) {
 	int i = 0;
 	printf("here");
@@ -1332,7 +1872,7 @@ void backup_func(int argc, char * argv[]) {
 				mod = mod | 2;
 			else if (!strcmp(argv[i], "-y"))
 				mod = mod | 4;
-			else { //err wrong flags
+			else {	 //err wrong flags
 				printf("wrong flag!\n");
 				exit(1);
 			}
@@ -1340,15 +1880,27 @@ void backup_func(int argc, char * argv[]) {
 	}
 	int errcode = 0;
 	printf("path : %s mod : %d\n", path, mod);
-	// if ((errcode = do_backup(strict_path, mod)) < 0) //failure of backup 
-	// {
-	// 	printf("error no : %d", errcode);
-	// 	return;
-	// 	//error, make stderr
-	// }
+	if (strstr(path, ".") == NULL) {//dir
+		if ((mod & 3) == 0) {
+			fprintf(stderr, "wrong flag");
+			exit(1);
+		}
+	}
+	else {
+		if ((mod & 3) != 0) {
+			fprintf(stderr, "target is file but flag is about dir");
+			exit(1);
+		}
+	}
+	if ((errcode = bfs_worker_realfs(strict_path, mod)) < 0) //failure of backup 
+	{
+		printf("error no : %d", errcode);
+		return;
+		//error, make stderr
+	}
 	printf("hfffffff");
 }
-void remove_func(int argc, char*argv[]) {
+int remove_func(int argc, char*argv[]) {
 	if (argc <= 2) { //경로미입력
 		fprintf(stderr, "USAGE");
 		exit(1);
@@ -1373,28 +1925,31 @@ void remove_func(int argc, char*argv[]) {
 	char good_path[MAXPATH];
 	if (get_good_path(argv[2], good_path) < 0) { //bad path or path is parent of "HOME"
 		// fprintf(stderr, "this dir cannot be removed or backuped!");
-		printf("BADABADBADB");
+		printf("BADABADBADBfff");
 		exit(1);
 	}
 	char * target_name = substr(good_path, return_last_name(good_path) + 1, strlen(good_path));
 	printf("[[]]target : %s\n",target_name);
 	printf("mod : %d\n", mod);
-	if (strstr(target_name, ".") == NULL) {//dir {
-		if ((mod & 3) == 0) return -1;
+	if (strstr(target_name, ".") == NULL) {
+		if ((mod & 3) == 0) {
+			fprintf(stderr, "dir but no flag needed");
+			exit(1);
+		}
 	}
 	else { //file
-		printf("file");
-		if ((mod & 3) != 0) return -1;
+		if ((mod & 3) != 0) {
+			fprintf(stderr, "file but flag for dir exists");
+			exit(1);
+		}
 	}
-	/**
-	 * TODO: mod needed
-	*/
-	if (bfs_worker_mod(good_path, NULL, 0, mod) < 0) {
+
+	if (bfs_worker_mockfs(good_path, NULL, 0, mod) < 0) {
 		printf("file not exists in backup\n");
 		exit(1);
 	}
 }
-void recover_func(int argc, char* argv[]) {
+int recover_func(int argc, char* argv[]) {
 	printf("hello recover");
 	if (argc <= 2) { //경로미입력
 		fprintf(stderr, "USAGE");
@@ -1415,6 +1970,10 @@ void recover_func(int argc, char* argv[]) {
 			else if (!strcmp(argv[i], "-n")) {
 				mod = mod | 8;
 				i = i + 1;
+				if (i + 1 > argc) { //no path after -n
+					fprintf(stderr, "no path after -n");
+					exit(1);
+				}
 				newpathidx = i;
 				sprintf(newname, "%s", argv[i]);
 			}
@@ -1436,54 +1995,111 @@ void recover_func(int argc, char* argv[]) {
 	char * target_name = substr(good_path, return_last_name(good_path) + 1, strlen(good_path));
 	printf("[[]]target : %s\n",target_name);
 	if (strstr(target_name, ".") == NULL) {//dir 
-		if ((mod & 3) == 0) return -1;
+		if ((mod & 3) == 0) return -1; // no flag -d or -r
 	}
 	else { //file
-		if ((mod & 3) != 0) return -1;
+		if ((mod & 3) != 0) return -1; //flag -d or -r exists but path is file
 	}
-
-	//chk newpath(path) is null
+	 
 
 
 	if ((mod & 8) != 0) {
-		bfs_worker_mod(good_path, argv[newpathidx], 1, mod);
-		return;
+		char good_newpath[MAXPATH];
+		if (get_good_path(argv[newpathidx], good_newpath) < 0) {
+			fprintf(stderr, "bad path");
+			exit(1);
+		}
+		printf("newpath : %s\n", good_newpath);
+		if (bfs_worker_mockfs(good_path, good_newpath, 1, mod) < 0) {
+			fprintf(stderr, "file not exists in backup");
+			exit(1);
+		}
+		return 0;
 	}
 	
-	if (bfs_worker_mod(good_path, NULL, 1, mod) < 0) {
+	if (bfs_worker_mockfs(good_path, NULL, 1, mod) < 0) {
 		printf("file not exists in backup");
 		exit(1);
 	}
-	/**
-	 * TODO: mod needed
-	*/
 	
 }
-void list_func() {
+void list_func(int argc, char *argv[]) {
 	printf("hello list");
-	show_list_command(NULL);
+	if (argc > 3) {
+		fprintf(stderr, "usage");
+		exit(1);
+	}
+	if (argc == 2) {
+		show_list_command(NULL);
+		exit(0);
+	}
+	show_list_command(argv[2]);
 }
-void help_func() {
-	printf("hello help");
+void help_func(int argc, char *argv[]) {
+	// printf("hello help");
+	int flag = 0;
+	if (argc > 3) {
+		fprintf(stderr, "e");
+		exit(1);
+	}
+	if (argc == 3) {
+		flag |= (!strcmp(argv[2], "backup")) ? 1 : 0;
+		flag |= (!strcmp(argv[2], "remove")) ? 2 : 0;
+		flag |= (!strcmp(argv[2], "recover")) ? 4 : 0;
+		flag |= (!strcmp(argv[2], "list")) ? 8 : 0;
+	}
+	printf("Usage: ");
+	if (flag == 0) printf("\n");
+	if ((flag & 1) != 0 || flag == 0) {
+		show_backup_help();
+		if (flag != 0) return;
+	}
+	if ((flag & 2) != 0 || flag == 0) {
+		show_remove_help();
+		if (flag != 0) return;
+	}
+	if ((flag & 4) != 0 || flag == 0) {
+		show_recover_help();
+		if (flag != 0) return;
+	}
+	if ((flag & 8) != 0 || flag == 0) {
+		show_list_help();
+		if (flag != 0) return;
+	}	
+	if (flag == 0) printf("\t> help [COMMAND]\n");
+
 }
 
 //////////////////////////vvvvvvvv// main //////////////////////
 int main(int argc, char * argv[]) {
 	int i = 0;
+	check_valid_runloc();
+	printf("HOME : %s\n", getHome());
 	initEnum();	
 	initBackupDir();
 	initBackupLog(); //get backuplog and make pathpair or sth
 
 	//make mock filesystem in program and save it to mainDirList, maybe dont need when just do backup
 	initDirList();
+	load_log();
+
+	printf("---------------------\n");
+	show_log();
+	
 	load_backup();
 	show_all();//show result of load_backup,
+	// char *temp = "/home/backup";
+	// rmdirs(temp);
 
 	//for (i = 0; i < argc; i++) {
 	//	printf("%s\n", argv[i]);
 	//}
 	//printf("%d", argc);
-	if (argc < 2) exit(1);
+	if (argc < 2) {
+		printf("ERROR: wrong input\n");
+		printf("%s help : show commands for program\n", argv[0]);
+		exit(1);
+	}
 	switch(str2enum(argv[1])) {
 		case backup:
 			backup_func(argc, argv);
@@ -1498,10 +2114,11 @@ int main(int argc, char * argv[]) {
 			list_func(argc, argv);
 			break;
 		case help:
-			help_func();
+			help_func(argc, argv);
 			break;
 		default: //errorcom 
 			{
+				printf("WRONG command");
 				break;
 			}
 	}
