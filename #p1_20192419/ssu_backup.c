@@ -1109,7 +1109,7 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 				//rollback
 				return -1;
 			}
-			return 0;
+			return 1;
 		}
 
 	}
@@ -1227,6 +1227,10 @@ int bfs_worker_mockfs(char * target_path, char * newpath, int funcmod, int mod) 
 				int res = 0;
 				if (funcmod) res = restore_backup(t->head, newpath, temp, stamp, mod);
 				if (!res) remove_backup(t->head, stamp, funcmod);
+				else if (res < 0) {
+					printf("got error while doing recover!");
+					exit(1);
+				}
 				continue;
 			}
 			backupNode * backups = t->head;
