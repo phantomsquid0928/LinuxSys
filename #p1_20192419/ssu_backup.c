@@ -1689,7 +1689,6 @@ int show_list_command(char * path) { //4 : list
 	/**
 	 * TODO: just modify dfs_worker to print file / dir correctly and list more better
 	*/
-	if (target->childscnt == -1) { //file, show backups 
 		// backupNode * temp = target->head;
 		// while(temp) {
 		// 	menu * t = (menu*)malloc(sizeof(menu));
@@ -1699,32 +1698,31 @@ int show_list_command(char * path) { //4 : list
 		// 	printf("%s       %ldbytes")
 		// 	temp = temp->next;
 		// }
-	}
-	else {
-		push_menu(templist, target, 0); //segfault
-		dfs_worker(templist, target, 0);
-		
-		//print templist of target (tree)
-		menu * temp = templist->head;
-		int numcnt = 0;
-		printf("%d %s\n", temp->num, temp->node->path);
-		temp = temp->next;
-		while(temp -> next) {
-			filedir * target = temp->node;
-			printf("%d ", temp->num);
-			for (int i =0 ; i< temp->lv; i++) printf("| ");
-			if (target->childscnt == -1)
-				printf("├ %.20s%20s  %10ldbytes\n", target->name, target->rear->stamp, target->rear->statbuf.st_size);
-			else {
-				printf("├ %s\n", target->name);
-			}
-			temp = temp->next;
-		}
+	
+	push_menu(templist, target, 0); //segfault
+	dfs_worker(templist, target, 0);
+	
+	//print templist of target (tree)
+	menu * temp = templist->head;
+	int numcnt = 0;
+	printf("%d %s\n", temp->num, temp->node->path);
+	temp = temp->next;
+	while(temp -> next) {
+		filedir * target = temp->node;
 		printf("%d ", temp->num);
 		for (int i =0 ; i< temp->lv; i++) printf("| ");
-		printf("└ %.20s%20s   %10ldbytes\n", temp->node->name, temp->node->rear->stamp, temp->node->rear->statbuf.st_size);
-		numcnt = temp->num + 1;
+		if (target->childscnt == -1)
+			printf("├ %.20s%20s  %10ldbytes\n", target->name, target->rear->stamp, target->rear->statbuf.st_size);
+		else {
+			printf("├ %s\n", target->name);
+		}
+		temp = temp->next;
 	}
+	printf("%d ", temp->num);
+	for (int i =0 ; i< temp->lv; i++) printf("| ");
+	printf("└ %.20s%20s   %10ldbytes\n", temp->node->name, temp->node->rear->stamp, temp->node->rear->statbuf.st_size);
+	numcnt = temp->num + 1;
+	
     // filedir * target = mainDirList->head->node;
 	// printf("selected : %s\n", target->name);
     
