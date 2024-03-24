@@ -1262,9 +1262,13 @@ int bfs_worker_mockfs(char * target_path, char * newpath, int funcmod, int mod) 
 					if (i == input) break;
 					backups = backups->next;
 				}
-				
-				if (funcmod) restore_backup(backups, newpath, temp, stamp, mod);
-				remove_backup(backups, stamp, funcmod);
+				int res = 0;
+				if (funcmod) res = restore_backup(backups, newpath, temp, stamp, mod);
+				if (!res) remove_backup(backups, stamp, funcmod);
+				else if (res < 0) {
+					printf("got error while doing recover!");
+					exit(1);
+				}
 				continue;
 			}
 
@@ -1272,8 +1276,12 @@ int bfs_worker_mockfs(char * target_path, char * newpath, int funcmod, int mod) 
 			if ((mod & 4) != 0 && funcmod == 0) //remove -a option
 				continue;
 			if ((mod & 4) != 0 && funcmod == 1) {//recover -l option
-				restore_backup(prev, newpath, temp, stamp, mod);
-				remove_backup(prev, stamp, funcmod);
+				int res = restore_backup(prev, newpath, temp, stamp, mod);
+				if (!res) remove_backup(prev, stamp, funcmod);
+				else if (res < 0) {
+					printf("got error while doing recover!");
+					exit(1);
+				}
 			}
 			
 			continue;
