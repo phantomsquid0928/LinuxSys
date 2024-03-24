@@ -259,13 +259,14 @@ void find_lost_link(filedir * t) {
 	int chk_both_par_lost = 0; //둘이 다 고아이면 1
 	
 	char * parent_path = substr(t->path, 0, return_last_name(t->path));
-
+	printf("HELL");
 	while(temp) {
 		filedir * node = temp->node;
 
 		char * nodespar = substr(node->path, 0, return_last_name(node->path));
 		if (!strcmp(nodespar, t->path)) { //found lost child dir of t
 			int chk = 0;
+			// printf("hels");
 			for (int i = 0; i <= t->childscnt; i++) {
 				if (!strcmp(t->name, t->childs[i]->name)) {
 					chk = 1;
@@ -283,11 +284,15 @@ void find_lost_link(filedir * t) {
 				else {
 					for (int i = t->childscnt; i >= 0; i--) {
 						t->childs[i + 1] = t->childs[i];
-						if (strcmp(t->childs[i]->path, node->path) < 0) {
-							t->childs[i] = node;
+						
+						if (strcmp(t->childs[i]->path, node->path) < 0) {//abde  c
+							t->childs[i + 1] = node; 
 							break;
 						}
-						if (i == 0) t->childs[i] = node;
+						if (i == 0) {
+							t->childs[i] = node;
+						 	break;
+						}
 					}
 				}
 			
@@ -295,7 +300,7 @@ void find_lost_link(filedir * t) {
 			}
 		}
 		if (!strcmp(parent_path, node->path)) { //found lost chlids of node
-			// printf("2;l22222\n");
+			printf("2;l22222\n");
 			//add child on parent
 			// node->childscnt++;
 			chk_both_par_lost = -1;
@@ -313,16 +318,24 @@ void find_lost_link(filedir * t) {
 					node->childs[node->childscnt + 1] = t;
 				}
 				else {
+					printf("fff");
 					for (int i = node->childscnt; i >= 0; i--) {
 						node->childs[i + 1] = node->childs[i];
+						
 						if (strcmp(node->childs[i]->path, t->path) < 0) {
+							node->childs[i + 1] = t;
+							break;
+						}
+						if (i == 0) {
 							node->childs[i] = t;
 							break;
 						}
-						if (i == 0) node->childs[i] = t;
 					}
 				}
 				node->childscnt++;
+			}
+			for (int i =0 ; i<=node->childscnt;i++) {
+				printf("  |%s\n", node->childs[i]->name);
 			}
 			
 		}
@@ -333,6 +346,7 @@ void find_lost_link(filedir * t) {
 		temp = temp->next;
 	}
 	if (chk_both_par_lost == 1) { //sibling (1) exists, make parent dir for t and sibling
+		printf("hesssllo");
 		temp = mainDirList->head;
 		filedir * parentdir= initfd();
 		backupNode * backup = initbackup();
@@ -421,7 +435,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
 		return t;
     }
     else { // dup, chk if it is file or dir
-        // printf("???");
+        printf("???");
         if (t->childscnt != -1) { // dir, 새 파일차일드만 투포인터로 갱신후 날리기
             filedir * exists = temp->node;
             filedir ** templist = (filedir**)malloc(sizeof(filedir*) * (exists->childscnt + t->childscnt + 2));
@@ -469,8 +483,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
             
         
             addbackup(exists, t->head);//add new backup
-            // free(templist);
-            // free(t->childs); ///////// HAZARD
+            // free(templist); //hazard
             //two pointer
         }
         else { // file, get new backup and discard filedir
@@ -1195,10 +1208,7 @@ void dfs_worker(menulist * menus, filedir * target, int lv) {
 
 filedir * search_from_dirlist(char * goodpath);
 
-/**
- * TODO: 324 get return from restore, : fail or suc
- * 		if suc, remove if fail no remove
-*/
+
 /// @brief get file / dir path, do backup or recover by funcmod, controls actions by mod
 /// @param target_path from path
 /// @param newpath   to path, when remove, it is null/ when recover and mod has -n, then has new path
