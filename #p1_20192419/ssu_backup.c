@@ -1101,10 +1101,9 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 		// sprintf(target_path, "%s/%s", target_path, restorepath_args[i]);
 		strcat(target_path, "/");
 		strcat(target_path, restorepath_args[i]);
-		if (access(target_path, F_OK)) {
-			
+		if (access(target_path, F_OK)) {	
 			mkdir(target_path, 0777);
-			// chown(target_path, )
+			// chown(target_path, );
 		}
 	}
 	for (int i = 0; i < res2 - 1; i++) {
@@ -1780,14 +1779,13 @@ int show_list_command(char * path) { //4 : list
     char command[2048];
     int arglen = 0;
     scanf("%[^\n]s", command);
-    printf("%s", command);
+    // printf("%s", command);
     char ** argstemp = split(command, " ", &arglen); //utils function, strtok all and return args
     char ** args = (char**)malloc(sizeof(char *) * (arglen + 1));
 	args[0] = "";
 	for (int i =1 ;i < arglen + 1; i++) {
 		args[i] = argstemp[i - 1];
 	}
-
 
     if (arglen < 2) {
 		printf("wrong command");
@@ -1810,7 +1808,7 @@ int show_list_command(char * path) { //4 : list
 	}
 	filedir * select = temp->node;
 	args[2] = select->path;
-	printf("%s", args[2]);
+	// printf("%s", args[2]);
     if (!strcmp(args[1], "rm")) {     //call remove_func with args
         remove_func(arglen + 1, args);
 		return 0;
@@ -1820,7 +1818,23 @@ int show_list_command(char * path) { //4 : list
 		return 0;
     }
     else if (!strcmp(args[1], "vi")) {
-		//exec fork vi
+		// printf("hello");
+		int pid = fork();
+		if (pid == 0) {
+			// char *exe_name = "vi";
+			char filepath[4096];
+			if (access(select->path, F_OK)) {
+				printf("original file does not exists!\n");
+			}
+			strcpy(filepath, select->path);
+			char *exe_args[] = {"vi", filepath, NULL};
+			
+			execv("/usr/bin/vi", exe_args);
+		}
+		else {
+			int p = wait();
+			// printf("%d", p);
+		}
 		// printf("hello vi");
 		return 0;
     }
