@@ -1204,12 +1204,34 @@ char * getHome() {
 /// @param menus 
 /// @param target 
 /// @param lv 
-void dfs_worker(menulist * menus, filedir * target, int lv) {
+void dfs_worker(menulist * menus, filedir * target, int lv, char * padding) {
+	// strcpy(newpad, padding);
     for (int i=0 ;i <= target->childscnt; i++) {
-        filedir * child = target-> childs[i];
+		char * curpad = substr(padding, 0, sizeof(padding));
+		if (target->childscnt == i)
+			strcat(curpad, "  └ ");
+		else {
+			strcat(curpad, "  ├ ");
+		}
+		char * nextpad = substr(padding, 0, sizeof(padding));
+		filedir * child = target-> childs[i];
+		if (target->childscnt == i) {
+			for (int j = 0; j < strlen(child->name) / 2; j++)
+				strcat(nextpad, " ");
+		}
+		else {
+			strcat(nextpad, "  │ ");
+		}
+		
+        
         push_menu(menus, child, lv);
-        if (child->childscnt != -1) //dir;
-            dfs_worker(menus, child, lv + 1);
+        if (child->childscnt != -1) {
+			printf("%3d. %s %s/\n", menus->cnt - 1, curpad, child->name);
+            dfs_worker(menus, child, lv + 1, nextpad);
+		}
+		else {
+			printf("%3d. %s %-30s  %s   %ldbytes\n", menus->cnt - 1, curpad, child->name, child->rear->stamp, child->rear->statbuf.st_size);
+		}
     }
 }
 
@@ -1747,27 +1769,29 @@ int show_list_command(char * path) { //4 : list
 		}
 	}
 	push_menu(templist, target, 0); //segfault
-	dfs_worker(templist, target, 0);
+	char padding[4096];
+	printf("0. %s/\n", target->path);
+	dfs_worker(templist, target, 0, padding);
 	
 	//print templist of target (tree)
 	menu * temp = templist->head;
 	int numcnt = 0;
-	printf("%d %s\n", temp->num, temp->node->path);
+	// printf("%d %s\n", temp->num, temp->node->path);
 	temp = temp->next;
 	while(temp -> next) {
 		filedir * target = temp->node;
-		printf("%d ", temp->num);
-		for (int i =0 ; i< temp->lv; i++) printf("| ");
-		if (target->childscnt == -1)
-			printf("├ %.20s%20s  %10ldbytes\n", target->name, target->rear->stamp, target->rear->statbuf.st_size);
-		else {
-			printf("├ %s\n", target->name);
-		}
+		// printf("%d ", temp->num);
+		// for (int i =0 ; i< temp->lv; i++) printf("| ");
+		// if (target->childscnt == -1)
+		// 	printf("├ %.20s%20s  %10ldbytes\n", target->name, target->rear->stamp, target->rear->statbuf.st_size);
+		// else {
+		// 	printf("├ %s\n", target->name);
+		// }
 		temp = temp->next;
 	}
-	printf("%d ", temp->num);
-	for (int i =0 ; i< temp->lv; i++) printf("| ");
-	printf("└ %.20s%20s   %10ldbytes\n", temp->node->name, temp->node->rear->stamp, temp->node->rear->statbuf.st_size);
+	// printf("%d ", temp->num);
+	// for (int i =0 ; i< temp->lv; i++) printf("| ");
+	// printf("└ %.20s%20s   %10ldbytes\n", temp->node->name, temp->node->rear->stamp, temp->node->rear->statbuf.st_size);
 	numcnt = temp->num + 1;
 	
     // filedir * target = mainDirList->head->node;
@@ -2222,7 +2246,7 @@ int main(int argc, char * argv[]) {
 	// show_log(); // log, debug
 	
 	load_backup();
-	// show_all();//show result of load_backup, debug
+	show_all();//show result of load_backup, debug
 
 
 	// char *temp = "/home/backup";
