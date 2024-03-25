@@ -1047,6 +1047,7 @@ int remove_backup(backupNode * t, char * actiontime, int funcmod) {
 }
 
 int compare_md5_backups(char * path);
+int compare_md5_fast(char * path);
 /// @brief just restore file from backup(no bfs), bfs is called by outer caller(bfs_worker_mockfs), only file comes in
 /// @param t backupnode that FILE !!!111
 /// @param newpath if mod has 8, then path is newpath
@@ -1076,13 +1077,16 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 	int res1, res2;
 	char ** restorepath_args = NULL;
 	char target_path[MAXPATH] = "";
+	char stored_new[MAXPATH] = "";
+	sprintf(stored_new, "%s", newpath);
+	// strcat(stored_new, newpath);
 	// char stored_new[MAXPATH];
 	// char stored_rel[MAXPATH];
 
 	// strcpy(stored_new, newpath);
 	// strcpy(stored_rel, relpath);
 	if ((mod & 8) != 0)
-		restorepath_args = split(newpath, "/", &res1);
+		restorepath_args = split(stored_new, "/", &res1);
 	else {
 		restorepath_args = split(command_root, "/", &res1);
 	}
@@ -1732,16 +1736,17 @@ int show_list_command(char * path) { //4 : list
 	/**
 	 * TODO: just modify dfs_worker to print file / dir correctly and list more better
 	*/
-		// backupNode * temp = target->head;
-		// while(temp) {
-		// 	menu * t = (menu*)malloc(sizeof(menu));
-		// 	t->node = temp;
-		// 	t->next = NULL;
-		// 	push_menu(templist, t, 0);
-		// 	printf("%s       %ldbytes")
-		// 	temp = temp->next;
-		// }
-	
+	if (target->childscnt == -1) { // file
+		backupNode * temp = target->head;
+		while(temp) {
+			menu * t = (menu*)malloc(sizeof(menu));
+			t->node = temp;
+			t->next = NULL;
+			push_menu(templist, t, 0);
+			printf("%s       %ldbytes");
+			temp = temp->next;
+		}
+	}
 	push_menu(templist, target, 0); //segfault
 	dfs_worker(templist, target, 0);
 	
@@ -1904,6 +1909,21 @@ int compare_md5_backups(char * path) {
 			}
 			temp = temp->next;
 		}
+	}
+	return 0;
+}
+/// @brief comp only latest backup
+/// @param path 
+/// @return 0 no       1 same    -1 err
+int compare_md5_fast(char * path) {
+	filedir * exists = search_from_dirlist(path);
+	if (exists != NULL) {
+		int compres = 0;
+		backupNode * latest = exists->rear;
+		if ((compres = compare_md5(latest->backupPath, path)) < 0) {
+			return -1;
+		}
+		if (compres == 0) return 1;
 	}
 	return 0;
 }
@@ -2087,6 +2107,7 @@ int recover_func(int argc, char* argv[]) {
 	// char * target_name = substr(good_path, return_last_name(good_path) + 1, strlen(good_path));
 	// printf("[[]]target : %s\n",target_name);
 	// printf("here");
+	printf("target path : %s\n", good_path);
 
 	filedir * target = search_from_dirlist(good_path);
 	if (target->childscnt != -1) {//dir 
