@@ -72,6 +72,7 @@ typedef struct dirpoint { //uses for faster dir access
 typedef struct dirList {  //add all file, dir
   struct dirpoint *head;
   struct dirpoint *tail;
+  struct dirpoint *root;
   int size;
 } dirList;
 
@@ -215,124 +216,213 @@ filedir * initfd();
 backupNode * initbackup();
 filedir * addDirList(filedir * t, int chklost);
 void addfdchild(filedir * t, filedir * parent);
-void find_lost_link(filedir * t) {
-	dirpoint * temp = mainDirList->head;
+void find_lost_link(dirpoint * d) {
+	dirpoint * root = mainDirList->root;
 	filedir * sibling;
 	int chk_both_par_lost = 0; //둘이 다 고아이면 1
+	filedir * t = d->node;
 	
-	char * parent_path = substr(t->path, 0, return_last_name(t->path));
-	// printf("HELL");
-	while(temp) {
-		filedir * node = temp->node;
+	// char * parent_path = substr(t->path, 0, return_last_name(t->path));
+	char path1[MAXPATH];
+	char path2[MAXPATH];
+	
+	char common[MAXPATH] = "";
 
-		char * nodespar = substr(node->path, 0, return_last_name(node->path));
-		if (!strcmp(nodespar, t->path)) { //found lost child dir of t
-			int chk = 0;
-			// printf("hels");
-			for (int i = 0; i <= t->childscnt; i++) {
-				if (!strcmp(t->name, t->childs[i]->name)) {
-					chk = 1;
-					break;
-				}
-			}
-			if (chk == 0) { //not in list
-				// printf("fllsfsfsf");
-				//add child by alphasort... o(n)
-				// t->childscnt++;
-				t->childs = (filedir**)realloc(t->childs, sizeof(char*) * (t->childscnt + 2));
-				if (strcmp(t->childs[t->childscnt]->path, node->path) < 0) {
-					t->childs[t->childscnt + 1] = node;
-				}
-				else {
-					for (int i = t->childscnt; i >= 0; i--) {
-						t->childs[i + 1] = t->childs[i];
-						
-						if (strcmp(t->childs[i]->path, node->path) < 0) {//abde  c
-							t->childs[i + 1] = node; 
-							break;
-						}
-						if (i == 0) {
-							t->childs[i] = node;
-						 	break;
-						}
-					}
-				}
-			
-				t->childscnt++;
-			}
+	strcpy(path1, root->node->path);
+	strcpy(path2, t->path);
+
+	printf("%s %s\n", path1, path2);
+	int res1, res2;
+	char ** args1 = split(path1, "/", &res1);
+	char ** args2 = split(path2, "/", &res2);
+	
+	int small = res1 > res2 ? res2 : res1;
+	int i;
+	for (i = 0; i< small; i++) {
+		if (strcmp(args1[i], args2[i]) != 0) {
+			// strcat(common, "/");
+			// strcat(common, args1[i]);
+			break;
 		}
-		if (!strcmp(parent_path, node->path)) { //found lost chlids of node
-			// printf("2;l22222\n");
-			//add child on parent
-			// node->childscnt++;
-			chk_both_par_lost = -1;
-			int chk = 0;
-			for (int i = 0; i <= node->childscnt; i++) {
-				if (!strcmp(node->childs[i]->name, t->name)) {
-					chk = 1;
-					break;
-				}
-				// printf("   _f__%s\n", node->childs[i]->name);
-			}
-			if (chk == 0) { //not in list
-				node->childs = (filedir**)realloc(node->childs, sizeof(char*) * (t->childscnt + 2));
-				if (strcmp(node->childs[node->childscnt]->path, t->path) < 0) {
-					node->childs[node->childscnt + 1] = t;
-				}
-				else {
-					// printf("fff");
-					for (int i = node->childscnt; i >= 0; i--) {
-						node->childs[i + 1] = node->childs[i];
-						
-						if (strcmp(node->childs[i]->path, t->path) < 0) {
-							node->childs[i + 1] = t;
-							break;
-						}
-						if (i == 0) {
-							node->childs[i] = t;
-							break;
-						}
-					}
-				}
-				node->childscnt++;
-			}
-			// for (int i =0 ; i<=node->childscnt;i++) {
-			// 	printf("  |%s\n", node->childs[i]->name);
-			// }
-			
-		}
-		if (!strcmp(nodespar, parent_path) && chk_both_par_lost != -1 && strcmp(t->path, node->path) != 0) { //같은놈아닌데 부모가 같음 -> 형제인데 부모가 없나?
-			chk_both_par_lost = 1;
-			sibling = node;
-		}
-		temp = temp->next;
 	}
-	if (chk_both_par_lost == 1) { //sibling (1) exists, make parent dir for t and sibling
-		// printf("hesssllo");
-		temp = mainDirList->head;
-		filedir * parentdir= initfd();
-		backupNode * backup = initbackup();
-		char * parent_name = substr(parent_path, return_last_name(parent_path) + 1, strlen(parent_path));
-		char * parent_oripath = substr(t->head->oripath, 0, return_last_name(t->head->oripath));
-		strcpy(parentdir->path, parent_path);
-		strcpy(parentdir->name, parent_name);
-
-		strcpy(backup->backupPath, parent_path);
-		strcpy(backup->oripath, parent_oripath);
-
-		addbackup(parentdir, backup);
-		parentdir->childs = (filedir**)malloc(sizeof(filedir *) * 2);
-		if (strcmp(t->name, sibling->name) < 0) {
-			addfdchild(t, parentdir);
-			addfdchild(sibling, parentdir);
+	printf("common : %s\n", common);
+	int diff1 = res1 - i;
+	int diff2 = res2 - i;
+	filedir * check1;
+	filedir * check2;
+	printf("diff12: %d %d\n", diff1, diff2);
+	printf("i : %d\n", i);
+	printf("res1,2 : %d %d", res1, res2);
+	if (diff1 != 0) {
+		char temp1[MAXPATH];
+		strcpy(temp1, root->node->path);
+		filedir * child = root->node;
+		for (int j = res1 - 2; j >= i - 1; j--) {
+			strcpy(temp1, substr(temp1, 0, return_last_name(temp1)));
+			printf("p1 : %s\n", temp1);
+			filedir * fd = initfd();
+			strcpy(fd->path, temp1);
+			strcpy(fd->name , args1[j]);
+			fd->childs = (filedir**)malloc(sizeof(filedir*));
+			addfdchild(child, fd);
+			check1 = addDirList(fd, 0);
+			child = fd;
+			if (check1 != fd) break;
 		}
-		else {
-			addfdchild(sibling, parentdir);
-			addfdchild(t, parentdir);
-		}
-
-		addDirList(parentdir, 0);
 	}
+	if (diff2 != 0) { //root is kept, add nodes 
+		char temp2[MAXPATH];
+		strcpy(temp2, t->path);
+		filedir * child = t;
+		for (int j = res2 - 2; j >= i - 1; j--) {
+			strcpy(temp2, substr(temp2, 0, return_last_name(temp2)));
+			printf("p2 : %s\n", temp2);
+			filedir * fd = initfd();
+			strcpy(fd->path, temp2);
+			strcpy(fd->name, args2[j]);
+			fd->childs = (filedir**)malloc(sizeof(filedir*));
+			addfdchild(child, fd);
+			check2 = addDirList(fd, 0);
+			child = fd;
+			if (check2 != fd) break;
+		}
+	}
+	if (diff1 != 0 && diff2 == 0) { //root included by newone
+		mainDirList->root = d;
+		return;
+	}
+	if (diff1 != 0 && diff2 != 0) {
+		printf("%d", check1 == check2 ? 1 : 0);
+		dirpoint * point = mainDirList->head;
+		// printf("%s", check1->name);
+		while(point) {
+			if (point->node == check1) {
+				mainDirList->root = point;
+				break;
+			}
+			point = point->next;
+		}
+	}
+	
+	// else { //root is now new node with common
+
+	// }
+
+	// //compare args1, args2 make common parent
+	// //for both args, make lost dirs and link
+	// //make parent as root
+	// // printf("HELL");
+	// while(temp) {
+	// 	filedir * node = temp->node;
+
+	// 	char * nodespar = substr(node->path, 0, return_last_name(node->path));
+	// 	if (!strcmp(nodespar, t->path)) { //found lost child dir of t
+	// 		int chk = 0;
+	// 		// printf("hels");
+	// 		for (int i = 0; i <= t->childscnt; i++) {
+	// 			if (!strcmp(t->name, t->childs[i]->name)) {
+	// 				chk = 1;
+	// 				break;
+	// 			}
+	// 		}
+	// 		if (chk == 0) { //not in list
+	// 			// printf("fllsfsfsf");
+	// 			//add child by alphasort... o(n)
+	// 			// t->childscnt++;
+	// 			t->childs = (filedir**)realloc(t->childs, sizeof(char*) * (t->childscnt + 2));
+	// 			if (strcmp(t->childs[t->childscnt]->path, node->path) < 0) {
+	// 				t->childs[t->childscnt + 1] = node;
+	// 			}
+	// 			else {
+	// 				for (int i = t->childscnt; i >= 0; i--) {
+	// 					t->childs[i + 1] = t->childs[i];
+						
+	// 					if (strcmp(t->childs[i]->path, node->path) < 0) {//abde  c
+	// 						t->childs[i + 1] = node; 
+	// 						break;
+	// 					}
+	// 					if (i == 0) {
+	// 						t->childs[i] = node;
+	// 					 	break;
+	// 					}
+	// 				}
+	// 			}
+			
+	// 			t->childscnt++;
+	// 		}
+	// 	}
+	// 	if (!strcmp(parent_path, node->path)) { //found lost chlids of node
+	// 		// printf("2;l22222\n");
+	// 		//add child on parent
+	// 		// node->childscnt++;
+	// 		chk_both_par_lost = -1;
+	// 		int chk = 0;
+	// 		for (int i = 0; i <= node->childscnt; i++) {
+	// 			if (!strcmp(node->childs[i]->name, t->name)) {
+	// 				chk = 1;
+	// 				break;
+	// 			}
+	// 			// printf("   _f__%s\n", node->childs[i]->name);
+	// 		}
+	// 		if (chk == 0) { //not in list
+	// 			node->childs = (filedir**)realloc(node->childs, sizeof(char*) * (t->childscnt + 2));
+	// 			if (strcmp(node->childs[node->childscnt]->path, t->path) < 0) {
+	// 				node->childs[node->childscnt + 1] = t;
+	// 			}
+	// 			else {
+	// 				// printf("fff");
+	// 				for (int i = node->childscnt; i >= 0; i--) {
+	// 					node->childs[i + 1] = node->childs[i];
+						
+	// 					if (strcmp(node->childs[i]->path, t->path) < 0) {
+	// 						node->childs[i + 1] = t;
+	// 						break;
+	// 					}
+	// 					if (i == 0) {
+	// 						node->childs[i] = t;
+	// 						break;
+	// 					}
+	// 				}
+	// 			}
+	// 			node->childscnt++;
+	// 		}
+	// 		// for (int i =0 ; i<=node->childscnt;i++) {
+	// 		// 	printf("  |%s\n", node->childs[i]->name);
+	// 		// }
+			
+	// 	}
+	// 	if (!strcmp(nodespar, parent_path) && chk_both_par_lost != -1 && strcmp(t->path, node->path) != 0) { //같은놈아닌데 부모가 같음 -> 형제인데 부모가 없나?
+	// 		chk_both_par_lost = 1;
+	// 		sibling = node;
+	// 	}
+	// 	temp = temp->next;
+	// }
+	// if (chk_both_par_lost == 1) { //sibling (1) exists, make parent dir for t and sibling
+	// 	// printf("hesssllo");
+	// 	temp = mainDirList->head;
+	// 	filedir * parentdir= initfd();
+	// 	backupNode * backup = initbackup();
+	// 	char * parent_name = substr(parent_path, return_last_name(parent_path) + 1, strlen(parent_path));
+	// 	char * parent_oripath = substr(t->head->oripath, 0, return_last_name(t->head->oripath));
+	// 	strcpy(parentdir->path, parent_path);
+	// 	strcpy(parentdir->name, parent_name);
+
+	// 	strcpy(backup->backupPath, parent_path);
+	// 	strcpy(backup->oripath, parent_oripath);
+
+	// 	addbackup(parentdir, backup);
+	// 	parentdir->childs = (filedir**)malloc(sizeof(filedir *) * 2);
+	// 	if (strcmp(t->name, sibling->name) < 0) {
+	// 		addfdchild(t, parentdir);
+	// 		addfdchild(sibling, parentdir);
+	// 	}
+	// 	else {
+	// 		addfdchild(sibling, parentdir);
+	// 		addfdchild(t, parentdir);
+	// 	}
+
+	// 	addDirList(parentdir, 0);
+	// }
 	
 }
 /// @brief 
@@ -343,13 +433,14 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
     // printf("called");
     dirpoint * temp = mainDirList->head;
     int flag = 0;
-    // printf("adding %s\n", t->name); //debug
+    printf("adding %s\n", t->name); //debug
     if (mainDirList->size == 0) {
         dirpoint *newp = (dirpoint*)malloc(sizeof(dirpoint));
         newp->next = NULL;
         newp->node = t;
         mainDirList->head = newp;
         mainDirList->tail = newp;
+		mainDirList->root = newp;
         mainDirList->size++;
         // printf("ff");
         return t;
@@ -374,7 +465,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
     }
     if (flag == 0) //new
     {
-        // printf("NEW");
+        printf("NEW");
         dirpoint * newp = (dirpoint*)malloc(sizeof(dirpoint));
         newp->next = NULL;
         newp->node = t;
@@ -387,17 +478,18 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
 		 * 		부모가 내 (dir)링크 없는 경우, 내(dir)가 자식링크 없는경우
 		 * 		무결성검사필요
 		 * 		자식만 추가되서 부모가 없는경우
+		 * FATALBUTSOLVED: 멀리 떨어진 두 dir을 복원하면 위방식대론 못함-> 반복문으로 추가, 해결
 		*/
 		if (t->childscnt != -1 && chklost == 1) {
-			// printf("lost?");
-			find_lost_link(t);
+			printf("lost?");
+			find_lost_link(newp);
 		}
 		 //strcmp 로 alphabetic add 필요
         // printf("success %s %s\n", t->name, t->path); //debug
 		return t;
     }
     else { // dup, chk if it is file or dir
-        // printf("???");
+        printf("???");
         if (t->childscnt != -1) { // dir, 새 파일차일드만 투포인터로 갱신후 날리기
             filedir * exists = temp->node;
             filedir ** templist = (filedir**)malloc(sizeof(filedir*) * (exists->childscnt + t->childscnt + 2));
@@ -440,7 +532,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
             exists->childs = realloc(exists->childs, sizeof(char *) * rescnt);
             for (int i = 0; i< rescnt; i++) {
                 exists->childs[i] = templist[i];
-                // printf("%s : %p\n",templist[i]->name, templist[i]);
+                printf("%s : %p\n",templist[i]->name, templist[i]);
             }
             
         
@@ -792,6 +884,7 @@ void initDirList() {
 	mainDirList = (dirList*)malloc(sizeof(dirList));
     mainDirList->head = NULL;
     mainDirList->tail = NULL;
+	mainDirList->root = NULL;
     mainDirList->size = 0;
 }
 
@@ -863,6 +956,7 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
     sprintf(dir->name, "%s", substr(oripath, return_last_name(oripath) + 1, strlen(oripath))); // find name plz
 
     addbackup(dir, b);
+	int flag = 0;
     // addDirList(dir);
     // printf("%s || %s || %s\n", path,oripath, stamp); //debug
     q.push(&q, dir);
@@ -929,7 +1023,13 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
             
             q.push(&q, next);
         }
-        addDirList(target, 1);
+		if (flag == 0) {
+			addDirList(target, 1);
+			flag = 1;
+		}
+		else {
+			addDirList(target, 0);
+		}
     }
 	// destroyQueue(&q);
 }
@@ -1755,8 +1855,10 @@ char * get_comma_expr(long bytes) {
 */
 int remove_func(int argc, char*argv[]);
 int recover_func(int argc, char*argv[]);
+
+
 /**
- * TODO: change function form needed...
+ * TODO: mainDirList now has root, so this func can be changed
 */
 
 /// @brief list only! 
