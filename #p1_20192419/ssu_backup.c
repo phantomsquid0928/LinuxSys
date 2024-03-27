@@ -832,6 +832,7 @@ int make_log(char* target_path, char*path, char * stamp, int mod) { //0 backup, 
 		}
 		int size;
 		fprintf(fd, "%s\n", log);
+		close(fd);
 	}
 	
 	return 0;
@@ -1134,6 +1135,8 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 	while((len = read(fd, buf, 1024)) > 0) {
 		write(tofd, buf, len);
 	}
+	close(fd);
+	close(tofd);
 	
 	return 0;
 	// printf("restored %s!", t->stamp); 
@@ -1536,6 +1539,7 @@ int load_log() {
 			search_and_addLog(temp);
 		}
 	}
+	fclose(fp);
 }
 
 /// @brief use bfs_fs_maker() and make filesystem
