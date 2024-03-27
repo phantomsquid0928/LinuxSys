@@ -31,6 +31,16 @@ static const char *logModList[] = {
 	" backuped to ", " removed by ", " recovered to ", " already backuped to ", " not changed with "
 };
 
+/////////////////
+typedef struct {
+    commands val;
+	const char *str;
+} commandsMap;
+static int commandSize = sizeof(commandList) / sizeof(commandList[0]);
+commandsMap * conversion[COMMAND_ENT];
+char backup_path[MAXPATH];
+char logfile_path[MAXPATH];
+
 
 
 typedef struct backupNode {
@@ -64,42 +74,6 @@ typedef struct dirList {  //add all file, dir
   struct dirpoint *tail;
   int size;
 } dirList;
-
-/**f
- * added for test
-*/
-// typedef struct pathpair { //get from log file
-//     char stamp[4096]; //first
-//     char oripath[4096]; //second
-// }pathpair;
-
-
-// /////////////////// Log struct for .log file//////////
-
-// typedef struct Log{
-// 	// unsigned char md[MD5_DIGEST_LENGTH]; //get this when read .log file              if md1, absolute_path1 == md2 abpath2 -> they are same (-y)
-// 	char absolute_path_dir[MAXPATH]; //linked dir
-// 	int timestamp;          //home/backup/<timestamp>
-// 	char pure_path[MAXPATH];    //path til name          timestamp + pure_path == backup_path ((ex) > home/backup/<timestamp>/b/a.txt)
-// 	char purename[MAXDIR];       //-> absolute_path_dir + pure_path == absolute_path   if pure_path == purename -> file else file inside dir
-// 	struct Log * next;
-// }log;
-
-
-// log * logList; //linked list to save Logs
-
-// log * initLog() {
-
-// }
-
-// log ** searchbystamp(int timestamp) {
-
-// }
-// log ** searchbypath(char * absolute_path) { //absolute_path_dir
-
-// }
-
-
 
 /////////////////////vv pathpair for bfs ///////////
 
@@ -767,15 +741,13 @@ char ** split(char * command, char * spliter, int *res) {
     return temp;
 }
 
-/////////////////
-typedef struct {
-    commands val;
-	const char *str;
-} commandsMap;
-static int commandSize = sizeof(commandList) / sizeof(commandList[0]);
-commandsMap * conversion[COMMAND_ENT];
-char backup_path[MAXPATH];
-char logfile_path[MAXPATH];
+void check_valid_runloc() {
+	char * cwd = getcwd(NULL, 0);
+	if (strstr(cwd, "/home") == NULL || get_slash_cnt(cwd) < 2 || !strcmp(cwd, "/home/backup")) {
+		fprintf(stderr, "this command must be ran on user (/home/<username>) above\n");
+		exit(1);
+	}
+}
 
 
 ///////////////////^^^^^^^^// declare , util zone///////////////////////
@@ -821,13 +793,6 @@ void initDirList() {
     mainDirList->head = NULL;
     mainDirList->tail = NULL;
     mainDirList->size = 0;
-}
-void check_valid_runloc() {
-	char * cwd = getcwd(NULL, 0);
-	if (strstr(cwd, "/home") == NULL || get_slash_cnt(cwd) < 2 || !strcmp(cwd, "/home/backup")) {
-		fprintf(stderr, "this command must be ran on user (/home/<username>) above\n");
-		exit(1);
-	}
 }
 
 /////////////////// maker_zone (io zone) /////////////////////
@@ -1967,7 +1932,7 @@ int show_list_command(char * path) { //4 : list
 		
 		
     }
-    else if (!strcmp(args[1], "vi")) {
+    else if (!strcmp(args[1], "vi") || !strcmp(args[1], "vim")) {
 		filedir * final;
 		if (target->childscnt == -1) final = target;
 		else final = (filedir*)select;
