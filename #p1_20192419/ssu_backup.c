@@ -1037,11 +1037,11 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 	char * relpath = substr(t->oripath, strlen(command_root) + 1, strlen(t->oripath));
 
 	
-	// printf("}}%s\n", filename);
-	// printf("++%s\n", newpath); //dir that file will be stored.
-	// printf("---%s\n", root); //where the command issued
-	// printf("UU %s\n", command_root);
-	// printf("||%s\n",relpath);
+	printf("}}%s\n", filename);
+	printf("++%s\n", newpath); //dir that file will be stored.
+	printf("---%s\n", root); //where the command issued
+	printf("UU %s\n", command_root);
+	printf("||%s\n",relpath);
 
 	// if (access(command_root, F_OK) && (mod & 8) == 0) mkdir(command_root, 0777);
 	int res1, res2;
@@ -1070,6 +1070,7 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 	
 	for (int i =0 ; i< res1; i++) {
 		// sprintf(target_path, "%s/%s", target_path, restorepath_args[i]);
+		if ((mod & 8) != 0 && (mod & 3) == 0 && i == res1 - 1) break; 
 		strcat(target_path, "/");
 		strcat(target_path, restorepath_args[i]);
 		if (access(target_path, F_OK)) {	
@@ -1083,8 +1084,14 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 		strcat(target_path, relpath_args[i]);
 		if (access(target_path, F_OK)) mkdir(target_path, 0777);
 	}
-	strcat(target_path, "/");
-	strcat(target_path, relpath_args[res2 - 1]);
+	if ((mod & 8) == 0 || (mod & 3) != 0){
+		strcat(target_path, "/");
+		strcat(target_path, relpath_args[res2 - 1]);
+	}
+	else {
+		strcat(target_path, "/");
+		strcat(target_path, restorepath_args[res1 - 1]);
+	}
 	// printf("fff%d", t->statbuf.st_uid);
 	int fd, tofd;
 
@@ -1094,8 +1101,8 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 			printf("md5 chk error");
 			return -1;
 		}
-		if (chk == 1 && (mod & 8) == 0) { //same file exists also no -n -> no need to recover backup
-			if (make_log(target_path, t->backupPath, stamp, 4) < 0) { //md5
+		if (chk == 0 && (mod & 8) == 0) { //same file exists also no -n -> no need to recover backup
+			if (make_log(t->backupPath, target_path, stamp, 4) < 0) { //md5
 				printf("log error");
 				// errorcode = -3;				
 				//rollback
@@ -1915,6 +1922,13 @@ int show_list_command(char * path) { //4 : list
 				printf("bad path input\n");
 				exit(1);
 			}
+			struct stat statbuf;
+			if (lstat(new_good_path, &statbuf) == 0) {
+				if (S_ISDIR(statbuf.st_mode)) {
+					printf("new path and backup target are not same filetype!\n");
+					exit(1);
+				}
+			}
 			backupNode * t = (backupNode *)select;
 			char * stamp = getDate();
 			char * root = t->oripath;
@@ -2284,6 +2298,17 @@ int recover_func(int argc, char* argv[]) {
 		if (get_good_path(argv[newpathidx], good_newpath) < 0) {
 			fprintf(stderr, "bad path");
 			exit(1);
+		}
+		struct stat statbuf;
+		if (lstat(good_newpath, &statbuf) == 0) {
+			if (S_ISDIR(statbuf.st_mode) && (mod & 3) == 0) {
+				printf("new path and backup target is not same filetype!\n");
+				exit(1);
+			}
+			if (S_ISREG(statbuf.st_mode) && (mod & 3) != 0) {
+				printf("new path and backup target is not same filetype!\n");
+				exit(1);
+			}
 		}
 		// printf("newpath : %s\n", good_newpath);
 		if (bfs_worker_mockfs(good_path, good_newpath, 1, mod) < 0) {
