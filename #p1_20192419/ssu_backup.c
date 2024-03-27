@@ -1443,6 +1443,8 @@ int bfs_worker_realfs(char * path, int mod) {
 				errorcode = -3;			
 				break;
 			}
+			close(fd);
+			close(target_fd);
 			isempty = 0;
 			continue;
 		}
