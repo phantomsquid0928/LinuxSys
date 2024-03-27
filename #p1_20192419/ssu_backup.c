@@ -871,13 +871,13 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
         q.pop(&q);
 
         if (lstat(target->head->backupPath, &curstat) < 0) exit(1);
-        if (S_ISREG(curstat.st_mode)) {
-            // target->statbuf = curstat;
-            addDirList(target, 1);
-            continue;
-        }
-		if (!S_ISDIR(curstat.st_mode)) continue;
+		// if (!S_ISDIR(curstat.st_mode)) continue;
         // free(namelist);
+		if (S_ISREG(curstat.st_mode)) {
+            // target->statbuf = curstat;
+			addDirList(target, 1);
+			continue;
+		}
         if ((cnt = scandir(target->head->backupPath, &namelist, NULL, alphasort)) < 0) {
             exit(1);
         }
@@ -926,7 +926,12 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
             addfdchild(next, target);
             // show_all();
             addbackup(next, back);
-            
+            if (S_ISREG(curstat.st_mode)) {
+            // target->statbuf = curstat;
+				addDirList(target, 1);
+				continue;
+			}
+			if (!S_ISDIR(curstat.st_mode)) continue;
             q.push(&q, next);
         }
         addDirList(target, 1);
