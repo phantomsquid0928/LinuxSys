@@ -382,7 +382,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
         mainDirList->tail = newp;
         mainDirList->size++;
 		/**
-		 * TODO: /#p1_20192419 들어왓는데 a.txt 만 커맨드로 받은 상태에서 #p1_20192419/b 디렉토리 잇다면 연결해야함
+		 * SOLVED: /#p1_20192419 들어왓는데 a.txt 만 커맨드로 받은 상태에서 #p1_20192419/b 디렉토리 잇다면 연결해야함
 		 * 		반대로 -d 옵션 후 안에 dir을 그냥 추가시 ->부모 링크 없음
 		 * 		부모가 내 (dir)링크 없는 경우, 내(dir)가 자식링크 없는경우
 		 * 		무결성검사필요
@@ -872,9 +872,6 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
         if (lstat(target->head->backupPath, &curstat) < 0) exit(1);
         if (S_ISREG(curstat.st_mode)) {
             // target->statbuf = curstat;
-			/**
-			 * TODO: comma
-			*/
             addDirList(target, 1);
             continue;
         }
@@ -1066,7 +1063,7 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 	char ** relpath_args = split(relpath, "/", &res2);
 
 	/**
-	 * TODO: chown 구현
+	 * NOTESSENTIAL: chown 구현
 	 * 		file user 저장햇다가
 	 * 		
 	*/
@@ -1490,7 +1487,9 @@ int bfs_worker_realfs(char * path, int mod) {
 	return errorcode;
 	// // destroyQueue(&q);
 }
-
+/**
+ * TODO: FATAL: LOG COMPARISON NEED FIX
+*/
 int load_log() {
 	char *path = "/home/backup/ssubak.log";
 	FILE * fp;
@@ -1511,13 +1510,16 @@ int load_log() {
 			// printf("%s %s", args[0], args[2]);
 			int padding = strlen("/home/backup/");
 			char * stamp = substr(args[3], padding, padding + 12); //12
+			char * relpath = substr(args[3], padding + 13, strlen(args[3]));
+			char * oripath = substr(args[1], 0, strlen(args[1]) - strlen(relpath) - 1);
+			// printf("%s %s\n", relpath, oripmath);
 			
 			// printf("%s %s\n", stamp, args[1]);
 			pathpair * temp = (pathpair *)malloc(sizeof(pathpair));
 
 			strcpy(temp->first, stamp);
-			char * parent = substr(args[1], 0, return_last_name(args[1]));
-			strcpy(temp->second, parent);
+			// char * parent = substr(args[1], 0, return_last_name(args[1]));
+			strcpy(temp->second, oripath);
 
 			// printf("saved!\n");
 			search_and_addLog(temp);
