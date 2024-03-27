@@ -292,7 +292,7 @@ void find_lost_link(dirpoint * d) {
 		return;
 	}
 	if (diff1 != 0 && diff2 != 0) {
-		printf("%d", check1 == check2 ? 1 : 0);
+		// printf("%d", check1 == check2 ? 1 : 0);
 		dirpoint * point = mainDirList->head;
 		// printf("%s", check1->name);
 		while(point) {
@@ -411,7 +411,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
             exists->childs = realloc(exists->childs, sizeof(char *) * rescnt);
             for (int i = 0; i< rescnt; i++) {
                 exists->childs[i] = templist[i];
-                printf("%s : %p\n",templist[i]->name, templist[i]);
+                // printf("%s : %p\n",templist[i]->name, templist[i]);
             }
             
         
