@@ -1037,11 +1037,11 @@ int restore_backup(backupNode * t, char * newpath, char * root, char * stamp, in
 	char * relpath = substr(t->oripath, strlen(command_root) + 1, strlen(t->oripath));
 
 	
-	printf("}}%s\n", filename);
-	printf("++%s\n", newpath); //dir that file will be stored.
-	printf("---%s\n", root); //where the command issued
-	printf("UU %s\n", command_root);
-	printf("||%s\n",relpath);
+	// printf("}}%s\n", filename);
+	// printf("++%s\n", newpath); //dir that file will be stored.
+	// printf("---%s\n", root); //where the command issued
+	// printf("UU %s\n", command_root);
+	// printf("||%s\n",relpath);
 
 	// if (access(command_root, F_OK) && (mod & 8) == 0) mkdir(command_root, 0777);
 	int res1, res2;
