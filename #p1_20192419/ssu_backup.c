@@ -231,7 +231,7 @@ void find_lost_link(dirpoint * d) {
 	strcpy(path1, root->node->path);
 	strcpy(path2, t->path);
 
-	printf("%s %s\n", path1, path2);
+	// printf("%s %s\n", path1, path2);
 	int res1, res2;
 	char ** args1 = split(path1, "/", &res1);
 	char ** args2 = split(path2, "/", &res2);
@@ -245,21 +245,21 @@ void find_lost_link(dirpoint * d) {
 			break;
 		}
 	}
-	printf("common : %s\n", common);
+	// printf("common : %s\n", common);
 	int diff1 = res1 - i;
 	int diff2 = res2 - i;
 	filedir * check1;
 	filedir * check2;
-	printf("diff12: %d %d\n", diff1, diff2);
-	printf("i : %d\n", i);
-	printf("res1,2 : %d %d", res1, res2);
+	// printf("diff12: %d %d\n", diff1, diff2);
+	// printf("i : %d\n", i);
+	// printf("res1,2 : %d %d", res1, res2);
 	if (diff1 != 0) {
 		char temp1[MAXPATH];
 		strcpy(temp1, root->node->path);
 		filedir * child = root->node;
 		for (int j = res1 - 2; j >= i - 1; j--) {
 			strcpy(temp1, substr(temp1, 0, return_last_name(temp1)));
-			printf("p1 : %s\n", temp1);
+			// printf("p1 : %s\n", temp1);
 			filedir * fd = initfd();
 			strcpy(fd->path, temp1);
 			strcpy(fd->name , args1[j]);
@@ -276,7 +276,7 @@ void find_lost_link(dirpoint * d) {
 		filedir * child = t;
 		for (int j = res2 - 2; j >= i - 1; j--) {
 			strcpy(temp2, substr(temp2, 0, return_last_name(temp2)));
-			printf("p2 : %s\n", temp2);
+			// printf("p2 : %s\n", temp2);
 			filedir * fd = initfd();
 			strcpy(fd->path, temp2);
 			strcpy(fd->name, args2[j]);
@@ -433,7 +433,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
     // printf("called");
     dirpoint * temp = mainDirList->head;
     int flag = 0;
-    printf("adding %s\n", t->name); //debug
+    // printf("adding %s\n", t->name); //debug
     if (mainDirList->size == 0) {
         dirpoint *newp = (dirpoint*)malloc(sizeof(dirpoint));
         newp->next = NULL;
@@ -465,7 +465,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
     }
     if (flag == 0) //new
     {
-        printf("NEW");
+        // printf("NEW");
         dirpoint * newp = (dirpoint*)malloc(sizeof(dirpoint));
         newp->next = NULL;
         newp->node = t;
@@ -481,7 +481,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
 		 * FATALBUTSOLVED: 멀리 떨어진 두 dir을 복원하면 위방식대론 못함-> 반복문으로 추가, 해결
 		*/
 		if (t->childscnt != -1 && chklost == 1) {
-			printf("lost?");
+			// printf("lost?");
 			find_lost_link(newp);
 		}
 		 //strcmp 로 alphabetic add 필요
@@ -489,7 +489,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
 		return t;
     }
     else { // dup, chk if it is file or dir
-        printf("???");
+        // printf("???");
         if (t->childscnt != -1) { // dir, 새 파일차일드만 투포인터로 갱신후 날리기
             filedir * exists = temp->node;
             filedir ** templist = (filedir**)malloc(sizeof(filedir*) * (exists->childscnt + t->childscnt + 2));
