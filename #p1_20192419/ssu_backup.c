@@ -1420,14 +1420,16 @@ int bfs_worker_realfs(char * path, int mod) {
 				continue;
 			}
 			if ((fd = open(lpath, O_RDONLY)) < 0) {
-				printf("open error");
+				printf("open error\n");
+				printf("%s\n", lpath);
 				errorcode = -4;				
 				//rollback
 				break;
 				//rollback
 			}
 			if ((target_fd = open(bpath, O_WRONLY | O_CREAT, 0666)) < 0) {
-				printf("open error");
+				printf("open error\n");
+				printf("%s\n", bpath);
 				errorcode = -4;				
 				break;
 			}
