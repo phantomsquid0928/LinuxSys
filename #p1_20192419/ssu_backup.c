@@ -501,14 +501,14 @@ void removeDirList(filedir *t) { //file -> 백업다 까버리기 dir -> 그냥�
 
 void addfdchild(filedir * t, filedir * parent) { //must be added with parent dir
 	dirpoint * temp = mainDirList->head;
-	while(temp) {
-		filedir * exist = temp->node;
-		if (!strcmp(t->path, exist->path)) {
-			parent->childs[++parent->childscnt] = temp->node;
-			return;
-		}
-		temp = temp->next;
-	}
+	// while(temp) {
+	// 	filedir * exist = temp->node;
+	// 	if (!strcmp(t->path, exist->path)) {
+	// 		parent->childs[++parent->childscnt] = temp->node;
+	// 		return;
+	// 	}
+	// 	temp = temp->next;
+	// }
     parent->childs[++parent->childscnt] = t;
     // addDirList(t);
     // if (t->childscnt != -1) //dir
@@ -923,9 +923,9 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
 			strcpy(back->size_comma, t);
 			// free(t);
 
-            addfdchild(next, target);
+            addfdchild(next, target); //o(n)
             // show_all();
-            addbackup(next, back);
+            addbackup(next, back); //o(1)
             
             q.push(&q, next);
         }
