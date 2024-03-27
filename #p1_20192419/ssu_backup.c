@@ -832,7 +832,7 @@ int make_log(char* target_path, char*path, char * stamp, int mod) { //0 backup, 
 		}
 		int size;
 		fprintf(fd, "%s\n", log);
-		close(fd);
+		fclose(fd);
 	}
 	
 	return 0;
