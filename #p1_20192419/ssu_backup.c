@@ -287,6 +287,7 @@ void find_lost_link(dirpoint * d) {
 			if (check2 != fd) break;
 		}
 	}
+	// show_all();
 	if (diff1 != 0 && diff2 == 0) { //root included by newone
 		mainDirList->root = d;
 		return;
@@ -359,10 +360,16 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
 		 * 		자식만 추가되서 부모가 없는경우
 		 * FATALBUTSOLVED: 멀리 떨어진 두 dir을 복원하면 위방식대론 못함-> 반복문으로 추가, 해결
 		*/
+		if (t->childscnt != -1) {
+			free(t->head);
+			t->head = NULL;
+			t->rear = NULL;
+		}
 		if (t->childscnt != -1 && chklost == 1) {
 			// printf("lost?");
 			find_lost_link(newp);
 		}
+
 		 //strcmp 로 alphabetic add 필요
         // printf("success %s %s\n", t->name, t->path); //debug
 		return t;
@@ -399,6 +406,7 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
                 if (res == 0) {
 					// printf("same!");
                     templist[rescnt++] = exists->childs[i];
+					// free(t->childs[j]);
                     i++;
                     j++;
                 }
@@ -415,8 +423,12 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
             }
             
         
-            addbackup(exists, t->head);//add new backup
-            // free(templist); //hazard
+            // addbackup(exists, t->head);//add new backup //#deprecated, it is dir, useless
+            free(templist); //hazard
+			free(t->head);
+			t->head = NULL;
+			t->rear = NULL;
+			// free(t);
             //two pointer
         }
         else { // file, get new backup and discard filedir
@@ -472,14 +484,14 @@ void removeDirList(filedir *t) { //file -> 백업다 까버리기 dir -> 그냥�
 
 void addfdchild(filedir * t, filedir * parent) { //must be added with parent dir
 	dirpoint * temp = mainDirList->head;
-	// while(temp) {
-	// 	filedir * exist = temp->node;
-	// 	if (!strcmp(t->path, exist->path)) {
-	// 		parent->childs[++parent->childscnt] = temp->node;
-	// 		return;
-	// 	}
-	// 	temp = temp->next;
-	// }
+	while(temp) {
+		filedir * exist = temp->node;
+		if (!strcmp(t->path, exist->path)) {
+			parent->childs[++parent->childscnt] = temp->node;
+			return;
+		}
+		temp = temp->next;
+	}
     parent->childs[++parent->childscnt] = t;
     // addDirList(t);
     // if (t->childscnt != -1) //dir
@@ -902,6 +914,10 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
             
             q.push(&q, next);
         }
+		/**
+		 * TODO: dangered
+		*/
+		// addDirList(target, 1);
 		if (flag == 0) {
 			addDirList(target, 1);
 			flag = 1;
@@ -1653,6 +1669,7 @@ int get_good_path(char * p, char * goodpath) {
 					char * temp = substr(respath, 0, return_last_name(respath));
 					// printf("%s\n", temp);
 					strcpy(respath, temp);
+					free(temp);
 				}
 				else {
 					strcat(respath, "/");
@@ -1750,13 +1767,10 @@ filedir * search_target_dir(char * targetpath) {
 	int flag = 0;
 	while(temp) {
 		filedir * node = temp->node;
-		if (targetpath != NULL && !strcmp(targetpath, node->path)) {
+		if (!strcmp(targetpath, node->path)) {
 			res = node;
 			flag = 1;
 			break;
-		}
-		if (get_slash_cnt(top->node->path) > get_slash_cnt(node->path)) {
-			top = temp;
 		}
 		temp = temp->next;
 	}
@@ -1764,11 +1778,21 @@ filedir * search_target_dir(char * targetpath) {
 		// printf("returning res");
 		return res;
 	}
-	else {
-		// printf("returning top");
-		return top->node; // returns head of fs
+	return NULL;
+}
+filedir * get_root() {
+	dirpoint * temp = mainDirList->head;
+	dirpoint * top = mainDirList->head;
+	filedir * res = NULL;
+	int flag = 0;
+	while(temp) {
+		filedir * node = temp->node;
+		if (get_slash_cnt(top->node->path) > get_slash_cnt(node->path)) {
+			top = temp;
+		}
+		temp = temp->next;
 	}
-	
+		return top->node;
 }
 int show_list_command(char * path) { //4 : list
     // menulist * templist = (menulist *)malloc(sizeof(menulist));
@@ -1787,12 +1811,19 @@ int show_list_command(char * path) { //4 : list
 		printf("empty!");
 		exit(0);
 	}
-    filedir * target = search_target_dir(targetpath);
-	
-	if (target == NULL) {
-		printf("no such named file!\n");
-		exit(1);
+	filedir * target;
+	if (path == NULL) {
+		target = get_root();
 	}
+    else {
+		target = search_target_dir(targetpath);
+		if (target == NULL) {
+			printf("no such named file!\n");
+			exit(1);
+		}
+	}
+	
+	
 	
 	char padding[MAXPATH] = "";
 
