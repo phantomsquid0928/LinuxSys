@@ -1391,10 +1391,15 @@ int bfs_worker_realfs(char * path, int mod) {
 	q.push(&q, p);
 	while(!q.empty(&q)) {
 		pathpair *pt = q.front(&q);
-		char * bpath = pt->first;   //backup
-		char * lpath = pt->second;  //ori
+		char * b = pt->first;   //backup
+		char * l  = pt->second;  //ori
+		char bpath[MAXPATH];
+		char lpath[MAXPATH];
+		strcpy(bpath, b);
+		strcpy(lpath, l);
 		// printf("watching : %s %s ", bpath, lpath);
 		q.pop(&q);
+		free(pt);
 		if (lstat(lpath, &statbuf) < 0) {
 			printf("lstat error, it is not real file");
 			//rollback all
@@ -1466,8 +1471,14 @@ int bfs_worker_realfs(char * path, int mod) {
 			if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
 			char next_bpath[MAXPATH];
 			char next_lpath[MAXPATH];
-			sprintf(next_bpath, "%s/%s", bpath, namelist[i]->d_name);
-			sprintf(next_lpath, "%s/%s", lpath, namelist[i]->d_name);
+			// sprintf(next_bpath, "%s/%s", bpath, namelist[i]->d_name);
+			strcpy(next_bpath, bpath);
+			strcat(next_bpath, "/");
+			strcat(next_bpath, namelist[i]->d_name);
+			strcpy(next_lpath, lpath);
+			strcat(next_lpath, "/");
+			strcat(next_lpath, namelist[i]->d_name);
+			// sprintf(next_lpath, "%s/%s", lpath, namelist[i]->d_name);
 			if (lstat(next_lpath, &statbuf) < 0) {
 				printf("lstat 2");
 				errorcode = -1;				
