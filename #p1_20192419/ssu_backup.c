@@ -255,9 +255,9 @@ void find_lost_link(dirpoint * d) {
 	// printf("res1,2 : %d %d", res1, res2);
 	if (diff1 != 0) {
 		char temp1[MAXPATH];
-		strcpy(temp1, root->node->path);
+		strcpy(temp1, root->node->path);	
 		filedir * child = root->node;
-		for (int j = res1 - 2; j >= i - 1; j--) {
+		for (int j = res1 - 2; j >= res1 - diff1 - 1; j--) {
 			strcpy(temp1, substr(temp1, 0, return_last_name(temp1)));
 			// printf("p1 : %s\n", temp1);
 			filedir * fd = initfd();
@@ -274,7 +274,7 @@ void find_lost_link(dirpoint * d) {
 		char temp2[MAXPATH];
 		strcpy(temp2, t->path);
 		filedir * child = t;
-		for (int j = res2 - 2; j >= i - 1; j--) {
+		for (int j = res2 - 2; j >= res2 - diff2 - 1; j--) {
 			strcpy(temp2, substr(temp2, 0, return_last_name(temp2)));
 			// printf("p2 : %s\n", temp2);
 			filedir * fd = initfd();
@@ -290,6 +290,8 @@ void find_lost_link(dirpoint * d) {
 	// show_all();
 	if (diff1 != 0 && diff2 == 0) { //root included by newone
 		mainDirList->root = d;
+		// printf("%s %s\n", check1->path, check2->path);
+		// addfdchild(check2, check1); //test
 		return;
 	}
 	if (diff1 != 0 && diff2 != 0) {
@@ -416,15 +418,18 @@ filedir * addDirList(filedir *t, int chklost) { //중복 들어올 시 백업만
             }
             // printf("DEV] two pointer res \n");
             exists->childscnt = rescnt-1;
+			t->childscnt = rescnt - 1;
             exists->childs = realloc(exists->childs, sizeof(char *) * rescnt);
+			t->childs = realloc(t->childs, sizeof(char*) * rescnt);
             for (int i = 0; i< rescnt; i++) {
                 exists->childs[i] = templist[i];
+				t->childs[i] = templist[i];
                 // printf("%s : %p\n",templist[i]->name, templist[i]);
             }
             
         
             // addbackup(exists, t->head);//add new backup //#deprecated, it is dir, useless
-            free(templist); //hazard
+            // free(templist); //hazard
 			free(t->head);
 			t->head = NULL;
 			t->rear = NULL;
@@ -484,14 +489,14 @@ void removeDirList(filedir *t) { //file -> 백업다 까버리기 dir -> 그냥�
 
 void addfdchild(filedir * t, filedir * parent) { //must be added with parent dir
 	dirpoint * temp = mainDirList->head;
-	while(temp) {
-		filedir * exist = temp->node;
-		if (!strcmp(t->path, exist->path)) {
-			parent->childs[++parent->childscnt] = temp->node;
-			return;
-		}
-		temp = temp->next;
-	}
+	// while(temp) {
+	// 	filedir * exist = temp->node;
+	// 	if (!strcmp(t->path, exist->path)) {
+	// 		parent->childs[++parent->childscnt] = temp->node;
+	// 		return;
+	// 	}
+	// 	temp = temp->next;
+	// }
     parent->childs[++parent->childscnt] = t;
     // addDirList(t);
     // if (t->childscnt != -1) //dir
@@ -917,14 +922,14 @@ void bfs_fs_maker(char * path, char * oripath, char * stamp) {//if file comes in
 		/**
 		 * TODO: dangered
 		*/
-		// addDirList(target, 1);
-		if (flag == 0) {
-			addDirList(target, 1);
-			flag = 1;
-		}
-		else {
-			addDirList(target, 0);
-		}
+		addDirList(target, 1);
+		// if (flag == 0) {
+		// 	addDirList(target, 1);
+		// 	flag = 1;
+		// }
+		// else {
+		// 	addDirList(target, 0);
+		// }
     }
 	// destroyQueue(&q);
 }
@@ -997,8 +1002,8 @@ int clear_empty_dirs(char * dir) {
 /// @param funcmod 0 -> remove   1 -> for recover
 /// @return 0 succeed -1 fail
 int remove_backup(backupNode * t, char * actiontime, int funcmod) {
-	if (remove(t->backupPath)) {
-		fprintf(stderr, "error while removing target %s\n", t->backupPath);
+	if (remove(t->backupPath) && errno != 2) {
+		fprintf(stderr, "error while removing target %s %d\n", t->backupPath, errno);
 		exit(1);
 	}
 	char *upperdir = substr(t->backupPath, 0, return_last_name(t->backupPath));
