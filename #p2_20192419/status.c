@@ -31,7 +31,8 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
     // show_commit_asfile();
-
+    show_commit_log();
+    show_fs(version_cursor->root, "");
     /**
      * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
      *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
@@ -39,10 +40,10 @@ int main(int argc, char * argv[]) {
      * 
     */
     
-    file * temp = version_cursor->head;
-    loglist * temp2 = head;
-    while(temp) {
-        commitlog * latest = temp->top;
+    // file * temp = version_cursor->head;
+    // loglist * temp2 = head;
+    // while(temp) {
+    //     commitlog * latest = temp->top;
         
-    }
+    // }
 }

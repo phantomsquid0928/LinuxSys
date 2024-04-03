@@ -158,40 +158,50 @@ queue * initQueue() {
 
 
 
-typedef struct commitlog {
+typedef struct filever {
     char version[MAXDIR];
     int status;     //0 added 1 mod 2 removed
     struct stat statbuf;
-    struct commitlog * next;
-}commitlog;
+    struct filever * next;
+}filever;
 
-typedef struct file {
+typedef struct filedir {
     char name[MAXDIR];
     char path[MAXPATH];// version path
     char oripath[MAXPATH]; //original path
-    commitlog * top; //latest
+    filever * top; //latest
 
-    struct file * next; //adds when newfile comes in
+    struct filedir ** childs; //adds when newfile comes in
+    int childscnt;
+}filedir;
 
-}file;
+typedef struct commitlog {
+    filedir * flink;
+    filever * vlink;
+    struct commitlog * next;
+}commitlog;
 
 typedef struct version_controller { //revert 3 ->  revert files to version that ver < 3 
     char curver[MAXDIR];
-    file * head;
-    file * rear;
+    filedir * root;
 }control;
 
 control * version_cursor = NULL;
 
-typedef struct loglist {
+typedef struct stagelog {
     char log[MAXPATH * 2];
-    struct loglist * next;
-}loglist;
-loglist * head = NULL;
-loglist * rear = NULL;
+    struct stagelog * next;
+}stagelog;
 
-loglist * newlog() {
-    loglist * temp = (loglist*)malloc(sizeof(loglist));
+
+stagelog * head = NULL;
+stagelog * rear = NULL;
+commitlog * commithead = NULL;
+commitlog * commitrear = NULL;
+
+
+stagelog * newlog() {
+    stagelog * temp = (stagelog*)malloc(sizeof(stagelog));
     if (temp == NULL) {
         printf("FATAL: NO MEM");
         exit(100);
@@ -205,7 +215,7 @@ int islogexists(char * target);
 /// @return 1 succeed 0 fail
 int addlog(char * target) { //target can only be file
     if (islogexists(target)) return 0;
-    loglist * temp = newlog();
+    stagelog * temp = newlog();
     strcpy(temp->log, target);
     if (head == NULL) {
         head = temp;
@@ -261,8 +271,8 @@ int addlogrecurs(char * target) {
 /// @param target 
 /// @return 1 succeed 0 fail
 int dellog(char * target) { //target can only be file
-    loglist * temp = head;
-    loglist * prev = NULL;
+    stagelog * temp = head;
+    stagelog * prev = NULL;
     // if (islogexists(target) == 0) return 0;
     // if (temp == NULL) return 0;
     while(temp) {
@@ -333,7 +343,7 @@ int dellogrecurs(char * target) {
     return res;
 }
 int islogexists(char * target) {
-    loglist * temp = head;
+    stagelog * temp = head;
     while(temp) {
         if (!strcmp(target, temp->log)) {
             return 1;
@@ -343,8 +353,8 @@ int islogexists(char * target) {
     return 0;
 }
 void freelog() {
-    loglist * temp = head;
-    loglist * prev;
+    stagelog * temp = head;
+    stagelog * prev;
     while(temp) {
         prev = temp;
         temp = temp->next;
@@ -352,29 +362,38 @@ void freelog() {
     }
 }
 
-file * newfile() {
-    file * temp = (file*)malloc(sizeof(file));
+void addcommitlog(commitlog * t) {
+    if (commithead == NULL) {
+        commithead = t;
+        commitrear = t;
+        return;
+    }
+    commitrear->next = t;
+    commitrear = t;
+}
+
+filedir * newfile() {
+    filedir * temp = (filedir*)malloc(sizeof(filedir));
     temp->top = NULL;
+    temp->childs = NULL;
+    temp->childscnt = -1;
+    return temp;
+}
+filever * newversion() {
+    filever * temp = (filever*)malloc(sizeof(filever));
     temp->next = NULL;
     return temp;
 }
-commitlog * newversion() {
+commitlog * newcommitlog() { //only directs file
     commitlog * temp = (commitlog*)malloc(sizeof(commitlog));
     temp->next = NULL;
     return temp;
 }
-int addfile(file * t) {
-    if (version_cursor == NULL) return -1;
-    if (version_cursor->head == NULL) {
-        version_cursor->head = t;
-        version_cursor->rear = t;
-        return 0;
-    }
-    version_cursor->rear->next = t;
-    version_cursor->rear = t;
-    return 0;
-}
-int addversion(file * f, commitlog * t) {
+
+// 
+
+
+int addversion(filedir * f, filever * t) {
     if (f->top == NULL) {
         f->top = t;
         return 0;
@@ -383,17 +402,148 @@ int addversion(file * f, commitlog * t) {
     f->top = t;
     return 0;
 }
-file * searchExistingFile(char * path) {
-    file * temp = version_cursor->head;
-    while(temp) {
-        if (!strcmp(temp->oripath, path)) {
-            return temp;
+
+/**
+ * TODO: add stamppath on dir
+*/
+/// @brief adds filedir by tree search
+/// @param root 
+/// @param target 
+/// @param cur 
+/// @return 
+filedir * addfiledir(filedir * target) { //always comes file
+    filedir * temp = version_cursor->root;
+    char * relpath = substr(target->oripath, strlen(temp->oripath) + 1, strlen(target->oripath));
+
+    printf("%s\n", relpath);
+    int res;
+    char ** args = split(relpath, "/", &res);
+    
+    char curpath[MAXPATH];
+    strcpy(curpath, temp->oripath); //root
+    for(int i= 0;i < res; i++) {
+        printf("cur : %s\n", temp->oripath);
+        strcat(curpath, "/");
+        strcat(curpath, args[i]);
+        printf("path: %s\n", curpath);
+        if (temp->childscnt != -1) {
+            for (int j = 0; j < temp->childscnt + 1; j++) {
+                printf("member : %s\n", temp->childs[j]->name);
+            }
+            printf("\n");
+            int start = 0;
+            int end = temp->childscnt + 1;
+            int chk = 0;
+            for (int j = 0; j < 20; j++) {
+                int mid = start + end >> 1;
+                int res = strcmp(temp->childs[mid]->oripath, curpath);
+                printf("res : %d %d %d, %s  :  %s\n",res, start, end, temp->childs[mid]->name, args[i]);
+                if (res == 0) { //there is same one
+                    chk = 1;
+                    break;
+                }
+                if (res > 0) {
+                    end = mid;
+                }
+                else {
+                    start = mid;
+                }
+            }
+            if (chk == 1) { 
+                //same, dir or file exists
+                printf("exists!\n");
+                if (i == res - 1) { //file
+                    addversion(temp->childs[start], target->top);
+                    free(target);
+                    return temp->childs[start];
+                }
+                else { //dir
+                    temp = temp->childs[start];
+                }
+                
+            }
+            else { //file or dir not exists
+                printf("here, %d %d", temp->childscnt, end);
+                temp->childs = (filedir **)realloc(temp->childs, sizeof(filedir*) * (temp->childscnt + 2));// 3-> 4ro  5
+
+                for (int j = temp->childscnt; j >= end; j--) {
+                    temp->childs[j + 1] = temp->childs[j];
+                }
+                if (i == res - 1) //no file, adding...
+                {
+                    temp->childs[end] = target;
+                    temp->childscnt++;
+                    printf("res\n");
+                    return target;
+                }
+                else { //no dir...
+                    printf("seeking\n");
+                    filedir * newfiledir = newfile();
+                    strcpy(newfiledir->name, args[i]);
+                    strcpy(newfiledir->oripath, curpath);
+                    temp->childs[end] = newfiledir;
+                    temp->childscnt++;
+                    temp = temp->childs[end];
+                }
+                
+            }
         }
-        temp = temp->next;
+        else { //cur dir has no child
+            if (i == res - 1) {// file {
+                printf("adding bare file\n\n");
+                temp->childs = (filedir**)malloc(sizeof(filedir*));
+                temp->childs[0] = target;
+                temp->childscnt = 0;
+                return target;
+            }
+            else { // not yet, keep adding empty dir
+                printf("adding new dir\n");
+                temp->childs = (filedir**)malloc(sizeof(filedir*));
+                filedir * newfiledir = newfile();
+                strcpy(newfiledir->name, args[i]);
+                strcpy(newfiledir->oripath, curpath);
+                temp->childs[0] = newfiledir;
+                temp->childscnt = 0;
+                temp = temp->childs[0];
+            }
+        }
     }
-    return NULL;
+
 }
 
+void show_fs(filedir * cur, char * padding) {
+    if (cur->childscnt == -1) { //file
+        printf(" file");
+        printf(" latest : %s\n", cur->top->version);
+        return;
+    }
+    printf("%s", cur->name);
+    printf("  dir\n");
+    for (int i = 0;i < cur->childscnt + 1; i++) {
+        char curpad[1000];
+        char nextpad[1000];
+        if (i == cur->childscnt) {
+            sprintf(curpad, "%s   └", padding);
+            sprintf(nextpad, "%s    ", padding);
+        }
+        else {
+            sprintf(curpad, "%s   ├", padding);
+            sprintf(nextpad, "%s   ", padding);
+        }
+        
+        if (cur->childs[i]->childscnt == -1) { //file
+            printf("%s/%s", curpad, cur->childs[i]->name);
+            printf(" file");
+            printf(" latest : %s\n", cur->childs[i]->top->version);
+            continue;
+        }
+        else {
+            printf("%s/", curpad);
+            show_fs(cur->childs[i], nextpad);
+        }
+        
+    }
+}
 
 
 
@@ -490,8 +640,9 @@ int load_commit_log() {
         sprintf(name, "%s", substr(target_path, return_last_name(target_path) + 1, strlen(target_path)));
         
         
-        file * f = newfile();
-        commitlog * v = newversion();
+        filedir * f = newfile();
+        filever * v = newversion();
+        commitlog * c = newcommitlog();
         // if (lstat(version_path, &statbuf) < 0 && status != 2) {
         //     return -1; //.repo corrupted
         // }
@@ -500,17 +651,16 @@ int load_commit_log() {
         strcpy(f->path, version_path);
         strcpy(v->version, commit_name);
         v->status = status;
+        addversion(f, v);
         if (status != 2)
             v->statbuf = statbuf;
-        file * exists = searchExistingFile(target_path);
-        if (exists != NULL) {
-            free(f);
-            addversion(exists, v);
-        }
-        else {
-            addfile(f);
-            addversion(f, v);
-        }
+        // filedir * exists = searchExistingFile(target_path);
+        filedir * exists = addfiledir(f);
+        
+        c->flink = exists;
+        c->vlink = v;
+        addcommitlog(c);
+        
         // printf("\n\n");
     }
     return 0;
@@ -537,31 +687,30 @@ int save_commit_log() {
 
 }
 void show_staging_log() {
-    loglist* temp = head;
+    stagelog* temp = head;
     while(temp) {
         printf("%s\n", temp->log);
         temp = temp->next;
     }
 }
-void show_commit_asfile() {
-    file * temp = version_cursor->head;
+void show_commit_log() {
+    commitlog * temp = commithead;
+    char curver[MAXDIR];
+    strcpy(curver, commithead->vlink->version);
     while(temp) {
-        printf("name : %s\n", temp->name);
-        printf("path : %s\n", temp->path);
-        printf("oripath : %s\n", temp->oripath);
-        commitlog * t2 = temp->top;
-        while(t2) {
-            printf("   version : %s\n", t2->version);
-            printf("   action : %d\n", t2->status);
+        printf("name : %s\n", temp->vlink->version);
+        // printf("path : %s\n", temp->path);
+        // printf("oripath : %s\n", temp->oripath);
+        // filever * t2 = temp->top;
+            strcpy(curver, temp->vlink->version);
+            printf("   status : %d\n", temp->vlink->status);
+            printf("   log : %s\n", temp->flink->oripath);
+            // printf("   action : %d\n", temp->);
             // printf("   size : %ld\n\n", t2->statbuf.st_size);
-            t2 = t2 ->next;
-        }
-        temp = temp->next;
+            temp = temp->next;
     }
 }
-void show_commit_log() {
-    //new struct just for log
-}
+
 void init() {
     char * cwd = getcwd(NULL, 0);
     if (cwd == NULL) exit(100);
@@ -577,6 +726,12 @@ void init() {
 /// @brief init controler. call ` after calling this
 void init_version_controller() {
     version_cursor = (control*)malloc(sizeof(control));
-    version_cursor->head = NULL;
-    version_cursor->rear = NULL;
+    filedir * root = newfile();
+    char cwd[MAXDIR];
+    strcpy(cwd, getcwd(NULL, 0));
+    char * name = substr(cwd, return_last_name(cwd) + 1, strlen(cwd));
+    strcpy(root->name, name);
+    strcpy(root->oripath, cwd);
+
+    version_cursor->root = root;
 }
