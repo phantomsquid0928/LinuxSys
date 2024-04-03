@@ -2,22 +2,20 @@
 #include "phantomutils.h"
 
 int main(int argc, char * argv[]) {
-    if (argc == 1) {
-        printf("ERROR <NAME> is not include\n");
+    if (argc != 1) {
+        printf("ERROR no args allowed\n");
 
         /**
          * TODO: usage
         */
         exit(1);
     }
-    if (strlen(argv[1]) > MAXDIR) {
-        printf("ERROR: '%s' is wrong path\n", argv[1]);
-        exit(2);
-    }
-    //init is essential
+    int loadres;
+
+    //call init and init_version_controller to make path and cursor
     init();
     init_version_controller();
-    int loadres;
+
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
@@ -32,24 +30,19 @@ int main(int argc, char * argv[]) {
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
+    // show_commit_asfile();
 
-
-    char targetpath[MAXPATH];
-    strcpy(targetpath, repopath);
-    sprintf(targetpath, "/%s", argv[1]);
-    if (access(targetpath, F_OK) == 0) {
-        printf("%s is already exist in repo\n", argv[1]);
-        exit(3);
-    }
-    if (head == NULL) //empty //test
-    {
-        printf("there is no staged file\n");
-        exit(4);
-    }
-
+    /**
+     * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
+     *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
+     *      
+     * 
+    */
+    
     file * temp = version_cursor->head;
+    loglist * temp2 = head;
     while(temp) {
+        commitlog * latest = temp->top;
         
     }
-
 }

@@ -117,7 +117,17 @@ void remove_exec(int argc, char ** argv){ //fork, exec
     }
 }
 void status_exec(int argc, char ** argv) { //
-    printf("hello status");
+    // printf("hello status");/
+    int pid = fork();
+    if (pid == 0) {
+        char * exec_args1[] = {"status", NULL};
+        execv("status", exec_args1); 
+    }
+    else {
+        int code;
+        int pid = wait(&code);
+        //error
+    }
 }
 void commit_exec(int argc, char ** argv) {
     printf("hello commit");
