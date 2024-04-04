@@ -45,7 +45,7 @@ int main(int argc, char * argv[]) {
         sprintf(purename, "%s", argv[1]);
     }
     sprintf(targetpath, "/%s", purename);
-    if (access(targetpath, F_OK) == 0) {
+    if (access(targetpath   , F_OK) == 0) {
         printf("%s is already exist in repo\n", purename);
         exit(3);
     }

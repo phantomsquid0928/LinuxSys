@@ -30,9 +30,6 @@
 // }
 #include "phantomutils.h"
 
-const int commandscnt = 8;
-
-char * commandsList[] = {"add", "remove", "status", "commit", "revert", "log", "help", "exit"};
 //////////////////////// 
 
 int repo_init() {
@@ -117,7 +114,17 @@ void remove_exec(int argc, char ** argv){ //fork, exec
     }
 }
 void status_exec(int argc, char ** argv) { //
-    printf("hello status");
+    // printf("hello status");/
+    int pid = fork();
+    if (pid == 0) {
+        char * exec_args1[] = {"status", NULL};
+        execv("status", exec_args1); 
+    }
+    else {
+        int code;
+        int pid = wait(&code);
+        //error
+    }
 }
 void commit_exec(int argc, char ** argv) {
     printf("hello commit");
@@ -126,7 +133,35 @@ void revert_exec(int argc, char ** argv) {
     printf("hello revert");
 }
 void log_exec(int argc, char ** argv) { 
-    printf("hello log");
+    // printf("hello log");
+    char path[MAXPATH] = "";
+    memset(path, 0, sizeof(path));
+    if (argc != 1) {
+        strcpy(path, argv[1]);
+    }
+    if (argc > 2) {
+        for (int i = 2; i < argc; i++) {
+            strcat(path, " ");
+            strcat(path, argv[i]);
+        }
+    }
+
+    int pid = fork();
+    if (pid == 0) {
+        char * exec_args1[] = {"./log", NULL};
+        char * exec_args2[] = {"./log", path, NULL};
+        if (argc == 1) {
+            execv("log", exec_args1);
+        }
+        else {
+            execv("log", exec_args2);
+        }
+    }
+    else {
+        int code;
+        int pid = wait(&code);
+        //error
+    }
 }
 void help_exec(int argc, char ** argv){
     printf("");
@@ -136,6 +171,7 @@ void exit_exec(int argc, char ** argv) {
 }
 
 /// @brief //////////////function pointer
+
 void (*exec_link[])(int, char**) = {add_exec, remove_exec, status_exec, commit_exec, revert_exec, log_exec, help_exec, exit_exec};
 int main() {
 

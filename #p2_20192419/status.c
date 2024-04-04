@@ -2,23 +2,21 @@
 #include "phantomutils.h"
 
 int main(int argc, char * argv[]) {
-    if (argc == 1) {
-        printf("ERROR <NAME> is not include\n");
+    if (argc != 1) {
+        printf("ERROR no args allowed\n");
         printf("Usage: ");
-        helpfuncs[3]();
+        helpfuncs[2]();
         /**
          * TODO: usage
         */
         exit(1);
     }
-    if (strlen(argv[1]) > MAXDIR) {
-        printf("ERROR: '%s' is wrong commit name\n", argv[1]);
-        exit(2);
-    }
-    //init is essential
+    int loadres;
+
+    //call init and init_version_controller to make path and cursor
     init();
     init_version_controller();
-    int loadres;
+
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
@@ -33,33 +31,26 @@ int main(int argc, char * argv[]) {
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
-
-
-    char targetpath[MAXPATH];
-    strcpy(targetpath, repopath);
-    char purename[MAXDIR];
-    if (strstr(argv[1], "\"") || strstr(argv[1], "'")) {
-        sprintf(purename, "%s", substr(argv[1], 1, strlen(argv[1]) - 1));
+    show_commit_log(NULL);
+    // show_staging_log();
+    show_fs(version_cursor->root, "");
+    stagelog * temp = head;
+    while(temp) {
+        temp->log;
+        temp = temp->next;
     }
-    else {
-        sprintf(purename, "%s", argv[1]);
-    }
-    sprintf(targetpath, "/%s", purename);
-    if (access(targetpath, F_OK) == 0) {
-        printf("%s is already exist in repo\n", purename);
-        exit(3);
-    }
-    if (head == NULL) //empty //test
-    {
-        printf("there is no staged file\n");
-        exit(4);
-    }
-
     
-
+    /**
+     * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
+     *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
+     *      
+     * 
+    */
+    
     // file * temp = version_cursor->head;
+    // loglist * temp2 = head;
     // while(temp) {
+    //     commitlog * latest = temp->top;
         
     // }
-
 }
