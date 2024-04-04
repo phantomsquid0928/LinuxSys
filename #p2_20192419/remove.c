@@ -13,7 +13,7 @@ int main(int argc, char * argv[]) {
     }
     char * purepath = purifypath(argv[1]); //argv contains ""
     // printf("%s\n", purepath);
-    if (strlen(argv[1]) > MAXPATH) {
+    if (strlen(purepath) > MAXPATH) {
         printf("ERROR: '%s' is wrong path\n", purepath);
         exit(2);
     }
