@@ -4,14 +4,17 @@
 int main(int argc, char * argv[]) {
     if (argc == 1) {
         printf("ERROR <PATH> is not include\n");
-
+        printf("Usage: ");
+        helpfuncs[1]();
         /**
          * TODO: usage
         */
         exit(1);
     }
+    char * purepath = purifypath(argv[1]); //argv contains ""
+    // printf("%s\n", purepath);
     if (strlen(argv[1]) > MAXPATH) {
-        printf("ERROR: '%s' is wrong path\n", argv[1]);
+        printf("ERROR: '%s' is wrong path\n", purepath);
         exit(2);
     }
     if (argc > 2) {
@@ -28,9 +31,9 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
     
-    char * abpath = realpath(argv[1], NULL);
+    char * abpath = realpath(purepath, NULL);
     if (abpath == NULL) {
-        printf("ERROR: '%s' is wrong path\n", argv[1]);
+        printf("ERROR: '%s' is wrong path\n", purepath);
         exit(2);
     }
     char cwd[MAXPATH];
@@ -81,5 +84,5 @@ int main(int argc, char * argv[]) {
 
     // show_staging_log();
 
-    // printf("add \"%s\"\n", argv[1]);
+    // printf("add \"%s\"\n", purepath);
 }

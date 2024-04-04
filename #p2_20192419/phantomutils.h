@@ -20,6 +20,10 @@ char commitpath[MAXPATH];
 char stagingpath[MAXPATH];
 char repopath[MAXPATH];
 
+const int commandscnt = 8;
+
+char * commandsList[] = {"add", "remove", "status", "commit", "revert", "log", "help", "exit"};
+
 /// @brief 
 /// @param absolute_path 
 /// @return loc of last /, if u wanna get name then use substr(~, func(~) + 1, strlen(~))
@@ -68,6 +72,41 @@ char ** split(char * command, char * spliter, int *res) {
     *res = cnt;
 
     return temp;
+}
+char * purifypath(char * path) {
+    int cnt = 0;
+    int mod = 0;
+    char * newpath = (char*)malloc(sizeof(char) * (sizeof(path) + 1));
+    if (strstr(path, ".") != NULL) //relpath
+    {
+        mod = 1;
+    }
+    strcpy(newpath, "");
+    char * arg = strtok(path, "/");
+    char * argtemp;
+    int chk = 1;
+    while(arg != NULL) {
+    	if (strstr(arg, "\"") != NULL || strstr(arg, "'") != NULL) {
+    		char * erased = substr(arg, 1, strlen(arg) - 1);
+            if (mod == 0 || chk == 0) {
+    		    strcat(newpath, "/");
+                mod = 1;
+            }
+            chk = 0;
+    		strcat(newpath, erased);
+    		arg = strtok(NULL, "/");
+    		continue;
+		}
+        if (mod == 0 || chk == 0) {
+		    strcat(newpath, "/");
+            mod = 1;
+        }
+        chk = 0;
+        
+		strcat(newpath, arg);
+    	arg = strtok(NULL, "/");
+	}
+    return newpath;
 }
 
 typedef struct node {
@@ -511,14 +550,21 @@ filedir * addfiledir(filedir * target) { //always comes file
 
 }
 
+/// @brief find filedir that has oripath
+/// @param oripath 
+/// @return fildir
+filedir * search_filedir(char * oripath) { 
+    filedir * temp = version_cursor->root;
+    
+}
 void show_fs(filedir * cur, char * padding) {
-    if (cur->childscnt == -1) { //file
-        printf(" file");
-        printf(" latest : %s\n", cur->top->version);
-        return;
-    }
+    // if (cur->childscnt == -1) { //file
+    //     printf(" file");
+    //     printf(" latest : %s\n", cur->top->version);
+    //     return;
+    // }
     printf("%s", cur->name);
-    printf("  dir\n");
+    printf("  dir %p\n", cur);
     for (int i = 0;i < cur->childscnt + 1; i++) {
         char curpad[1000];
         char nextpad[1000];
@@ -528,13 +574,13 @@ void show_fs(filedir * cur, char * padding) {
         }
         else {
             sprintf(curpad, "%s   ├", padding);
-            sprintf(nextpad, "%s   ", padding);
+            sprintf(nextpad, "%s   │", padding);
         }
         
         if (cur->childs[i]->childscnt == -1) { //file
             printf("%s/%s", curpad, cur->childs[i]->name);
             printf(" file");
-            printf(" latest : %s\n", cur->childs[i]->top->version);
+            printf(" latest : %s %p\n", cur->childs[i]->top->version, cur->childs[i]);
             continue;
         }
         else {
@@ -607,7 +653,7 @@ int load_commit_log() {
         char ** args;
         args = split(buf, "-", &argc);
 
-        char * commit_name = substr(args[0], 8, strlen(args[0]) - 1);
+        char * commit_name = substr(args[0], 9, strlen(args[0]) - 2);
         char * target_temp = NULL;
         int status = -1;
         // printf("commit_name : :%s:\n", commit_name);
@@ -693,23 +739,70 @@ void show_staging_log() {
         temp = temp->next;
     }
 }
-void show_commit_log() {
+int show_commit_log(char * version) {
     commitlog * temp = commithead;
+    
+    struct stat statbuf;
     char curver[MAXDIR];
-    strcpy(curver, commithead->vlink->version);
+    int chk = 0;
+
+
     while(temp) {
-        printf("name : %s\n", temp->vlink->version);
-        // printf("path : %s\n", temp->path);
-        // printf("oripath : %s\n", temp->oripath);
-        // filever * t2 = temp->top;
-            strcpy(curver, temp->vlink->version);
-            printf("   status : %d\n", temp->vlink->status);
-            printf("   log : %s\n", temp->flink->oripath);
-            // printf("   action : %d\n", temp->);
-            // printf("   size : %ld\n\n", t2->statbuf.st_size);
-            temp = temp->next;
+        strcpy(curver, temp->vlink->version);
+        // printf("%s %s", version, curver);
+        if (version == NULL || !strcmp(version, curver)) {
+            chk = 1;
+            printf("commit: %s\n", temp->vlink->version);
+            while(1) {
+                if (temp == NULL || strcmp(curver, temp->vlink->version) != 0) break;
+                strcpy(curver, temp->vlink->version);
+                char tempstr[1000];
+                if (temp->vlink->status == 0) strcpy(tempstr, "new file");
+                if (temp->vlink->status == 1) strcpy(tempstr, "modified");
+                if (temp->vlink->status == 2) strcpy(tempstr, "removed");
+                printf("-  %s: %s\n", tempstr, temp->flink->oripath);
+                // printf("   log : %s\n", temp->flink->oripath);
+                // printf("   p : %p\n", temp->flink);
+                // printf("   f : %p\n", temp->vlink);
+                // printf("   action : %d\n", temp->);
+                // printf("   size : %ld\n\n", t2->statbuf.st_size);
+                temp = temp->next;
+            }
+            printf("\n");
+        }
+        if (version != NULL) temp = temp->next;
     }
+    if (chk == 0) return 0; //no commit log
+    return 1;
 }
+
+void addhelp() {
+    printf("add <PATH> : record path to staging area, path will tracking modification\n");;
+}
+void removehelp() {
+    printf("remove <PATH> : record path to staging area, path will not tracking modification\n");
+}
+void statushelp() {
+    printf("status : show staging area status\n");
+}
+void commithelp() {
+    printf("commit <NAME> : backup staging area with commit name\n");
+}
+void reverthelp() {
+    printf("revert <NAME> : recover commit version with commit name\n");
+}
+void loghelp() {
+    printf("log : show commit log\n");
+}
+void helphelp() {
+    printf("help : show commands for program\n");
+}
+void exithelp() {
+    printf("exit : exit program\n");
+}
+
+void (*helpfuncs[])(void) = {addhelp, removehelp, statushelp, commithelp, reverthelp, loghelp, helphelp, exithelp};
+
 
 void init() {
     char * cwd = getcwd(NULL, 0);

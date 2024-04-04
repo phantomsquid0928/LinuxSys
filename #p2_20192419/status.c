@@ -4,7 +4,8 @@
 int main(int argc, char * argv[]) {
     if (argc != 1) {
         printf("ERROR no args allowed\n");
-
+        printf("Usage: ");
+        helpfuncs[2]();
         /**
          * TODO: usage
         */
@@ -30,9 +31,15 @@ int main(int argc, char * argv[]) {
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
-    // show_commit_asfile();
-    show_commit_log();
+    show_commit_log(NULL);
+    // show_staging_log();
     show_fs(version_cursor->root, "");
+    stagelog * temp = head;
+    while(temp) {
+        temp->log;
+        temp = temp->next;
+    }
+    
     /**
      * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
      *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
