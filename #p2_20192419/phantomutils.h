@@ -1,5 +1,5 @@
 #define OPENSSL_API_COMPAT 0x10100000L
-#define _DEFAULT_SOURCE 1
+#define _GNU_SOURCE 1
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,14 +10,16 @@
 #include <dirent.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <features.h>
+#include <utime.h>
 
 #include <openssl/md5.h>
 
 #define MAXPATH 4096
 #define MAXDIR 256
 
-char commitpath[MAXPATH];
-char stagingpath[MAXPATH];
+char commitlogpath[MAXPATH];
+char staginglogpath[MAXPATH];
 char repopath[MAXPATH];
 
 const int commandscnt = 8;
@@ -204,11 +206,15 @@ typedef struct filever {
     struct filever * next;
 }filever;
 
+/// @brief 
 typedef struct filedir {
     char name[MAXDIR];
     char path[MAXPATH];// version path
     char oripath[MAXPATH]; //original path
     filever * top; //latest
+    int chk;       //indicates whether it is target of commit chk = -1 : existing, no change   chk = 0 new    chk= 1 modify   chk= 2 remove
+    int istrack;   //chk whether this file is being tracked 0 : no 1 : yes
+    filever * target; //use when make revert?
 
     struct filedir ** childs; //adds when newfile comes in
     int childscnt;
@@ -222,6 +228,7 @@ typedef struct commitlog {
 
 typedef struct version_controller { //revert 3 ->  revert files to version that ver < 3 
     char curver[MAXDIR];
+    char latestver[MAXDIR];
     filedir * root;
 }control;
 
@@ -416,6 +423,8 @@ filedir * newfile() {
     temp->top = NULL;
     temp->childs = NULL;
     temp->childscnt = -1;
+    temp->chk = -1; //not target
+    temp->istrack = 0; //no tracking
     return temp;
 }
 filever * newversion() {
@@ -446,17 +455,22 @@ int addversion(filedir * f, filever * t) {
  * TODO: add stamppath on dir
 */
 /// @brief adds filedir by tree search
-/// @param root 
+/// @param mod 0 from commit 1 from stage, temp
 /// @param target 
-/// @param cur 
 /// @return 
-filedir * addfiledir(filedir * target) { //always comes file
+/// @todo mod
+filedir * addfiledir(filedir * target, int mod) { //always comes file
     filedir * temp = version_cursor->root;
     char * relpath = substr(target->oripath, strlen(temp->oripath) + 1, strlen(target->oripath));
 
     printf("%s\n", relpath);
     int res;
     char ** args = split(relpath, "/", &res);
+    if (!strcmp(target->oripath, temp->oripath) && mod == 1) { // root is ontrack
+        temp->istrack = 1;
+        free(target);
+        return temp;
+    }
     
     char curpath[MAXPATH];
     strcpy(curpath, temp->oripath); //root
@@ -466,18 +480,18 @@ filedir * addfiledir(filedir * target) { //always comes file
         strcat(curpath, args[i]);
         printf("path: %s\n", curpath);
         if (temp->childscnt != -1) {
-            for (int j = 0; j < temp->childscnt + 1; j++) {
-                printf("member : %s\n", temp->childs[j]->name);
-            }
+            // for (int j = 0; j < temp->childscnt + 1; j++) {
+            //     printf("member : %s\n", temp->childs[j]->name);
+            // }
             printf("\n");
             int start = 0;
             int end = temp->childscnt + 1;
             int chk = 0;
-            for (int j = 0; j < 20; j++) {
+            for (int j = 0; j < 30; j++) { //can handle 2 ^ 30filedirs in same dir, may cause err
                 int mid = start + end >> 1;
-                int res = strcmp(temp->childs[mid]->oripath, curpath);
+                int res = strcmp(temp->childs[mid]->name, args[i]);
                 printf("res : %d %d %d, %s  :  %s\n",res, start, end, temp->childs[mid]->name, args[i]);
-                if (res == 0) { //there is same one
+                if (res == 0) { //there is same one, found real quick
                     chk = 1;
                     break;
                 }
@@ -489,15 +503,20 @@ filedir * addfiledir(filedir * target) { //always comes file
                 }
             }
             if (chk == 1) { 
+                int mid = start + end >> 1;
                 //same, dir or file exists
                 printf("exists!\n");
+                if (mod == 1) {
+                    temp->childs[mid]->istrack = 1;
+                }
                 if (i == res - 1) { //file
-                    addversion(temp->childs[start], target->top);
+                    if (mod != 1)
+                        addversion(temp->childs[mid], target->top);
                     free(target);
-                    return temp->childs[start];
+                    return temp->childs[mid];
                 }
                 else { //dir
-                    temp = temp->childs[start];
+                    temp = temp->childs[mid];
                 }
                 
             }
@@ -510,8 +529,12 @@ filedir * addfiledir(filedir * target) { //always comes file
                 }
                 if (i == res - 1) //no file, adding...
                 {
+                    // if (mod == 0) {//from commit
                     temp->childs[end] = target;
                     temp->childscnt++;
+                    // if (mod == 1) {
+                    //     target->istrack = 1;
+                    // }
                     printf("res\n");
                     return target;
                 }
@@ -520,6 +543,9 @@ filedir * addfiledir(filedir * target) { //always comes file
                     filedir * newfiledir = newfile();
                     strcpy(newfiledir->name, args[i]);
                     strcpy(newfiledir->oripath, curpath);
+                    if (mod == 1) {
+                        newfiledir->istrack = 1;
+                    }
                     temp->childs[end] = newfiledir;
                     temp->childscnt++;
                     temp = temp->childs[end];
@@ -532,6 +558,9 @@ filedir * addfiledir(filedir * target) { //always comes file
                 printf("adding bare file\n\n");
                 temp->childs = (filedir**)malloc(sizeof(filedir*));
                 temp->childs[0] = target;
+                if (mod == 1) {
+                    temp->childs[0]->istrack = 1;
+                }
                 temp->childscnt = 0;
                 return target;
             }
@@ -542,6 +571,9 @@ filedir * addfiledir(filedir * target) { //always comes file
                 strcpy(newfiledir->name, args[i]);
                 strcpy(newfiledir->oripath, curpath);
                 temp->childs[0] = newfiledir;
+                if (mod == 1) {
+                    temp->childs[0]->istrack = 1;
+                }
                 temp->childscnt = 0;
                 temp = temp->childs[0];
             }
@@ -549,14 +581,59 @@ filedir * addfiledir(filedir * target) { //always comes file
     }
 
 }
-
-/// @brief find filedir that has oripath
-/// @param oripath 
-/// @return fildir
+/// @deprecated
+/// @brief find filedir that has oripath, O(logwlogn)
+/// @param oripath from staginglog, search filedir. -> no file : newfile staged, yes file : just staged.
+/// @return fildir 
 filedir * search_filedir(char * oripath) { 
     filedir * temp = version_cursor->root;
+    char * relpath = substr(oripath, strlen(oripath) + 1, strlen(oripath));
+
+    printf("%s\n", relpath);
+    int res;
+    char ** args = split(relpath, "/", &res);
     
+    char curpath[MAXPATH];
+    strcpy(curpath, temp->oripath); //root
+    for (int i = 0; i < res; i++) {
+        printf("cur : %s\n", temp->oripath);
+        strcat(curpath, "/");
+        strcat(curpath, args[i]);
+        printf("path: %s\n", curpath);
+
+        int start = 0;
+        int end = temp->childscnt + 1;
+        int chk = 0;
+        for (int j = 0; j < 20; j++) {
+            int mid = start + end >> 1;
+            int res = strcmp(temp->childs[mid]->oripath, curpath);
+            printf("res : %d %d %d, %s  :  %s\n",res, start, end, temp->childs[mid]->name, args[i]);
+            if (res == 0) { //there is same one
+                chk = 1;
+                break;
+            }
+            if (res > 0) {
+                end = mid;
+            }
+            else {
+                start = mid;
+            }
+        }
+        if (chk == 1) {
+            if (i == res - 1) { //found file
+                return temp->childs[start];
+            }
+            else {
+                temp = temp->childs[start];
+            }
+        }
+        else {
+            if (i == res - 1) {}
+            return NULL;
+        }
+    }
 }
+
 void show_fs(filedir * cur, char * padding) {
     // if (cur->childscnt == -1) { //file
     //     printf(" file");
@@ -591,8 +668,267 @@ void show_fs(filedir * cur, char * padding) {
     }
 }
 
+void stagedtofs() {
+    stagelog * temp = head;
+
+    while(temp) { //o logn logn
+        char * oripath = temp->log;
+        char * name = substr(oripath, return_last_name(oripath) + 1, strlen(oripath));
+        filedir * f = newfile();
+        strcpy(f->oripath, oripath);
+        strcpy(f->name, name);
+        //as this is temp file, there is no path (commitpath)
+        f->istrack = 1;
+        f->chk = -2; //newfile newflag
+        filedir * found = addfiledir(f, 1);
+        
+        temp = temp->next;
+    }
+}
 
 
+queue q;
+queue tracked;
+queue untracked;
+void initstatus(){
+    q = *initQueue();
+    tracked = *initQueue();
+    untracked = *initQueue();
+}
+
+
+int makestatus() {
+    struct stat statbuf;
+    struct dirent ** namelist;
+    int cnt;
+
+
+    filedir * root = version_cursor->root;
+    
+    q = *initQueue();
+    tracked = *initQueue();
+    untracked = *initQueue();
+
+
+    q.push(&q, root); //commit 한번 돌기-> commit할 파일 표시 -> 다시 돌기 -> 실제파일과 비교
+    while(!q.empty(&q)) { // two pointer 사용 필요
+        filedir * f = q.front(&q);
+        q.pop(&q);
+        if ((cnt = scandir(f->oripath, &namelist, NULL, alphasort)) < 0) { //whole dir erased
+            // printf("fkfkfk");
+            // continue;
+            // exit(1);
+            cnt = 0;
+        }
+        //
+        int i = 0, j = 0;
+        while(1) {
+            if (j < cnt && (!strcmp(namelist[j]->d_name, ".") || !strcmp(namelist[j]->d_name, ".."))) {
+                j++;
+                continue;
+            }
+            if (j < cnt && !strcmp(namelist[j]->d_name, ".repo") && !strcmp(f->oripath, getcwd(NULL, 0))) {
+                j++;
+                continue;
+            }
+            if (i > f->childscnt) { //new
+                if (j == cnt) break;
+                filedir * n = newfile();
+                char nextpath[MAXPATH];
+                strcpy(nextpath, f->oripath);
+                strcat(nextpath, "/");
+                strcat(nextpath, namelist[j]->d_name);
+                strcpy(n->oripath, nextpath);
+                strcpy(n->name, namelist[j]->d_name);
+
+                if (lstat(nextpath, &statbuf) < 0) {
+                    printf("sssssss");
+                    exit(1);
+                }
+
+                if (S_ISREG(statbuf.st_mode)) {
+                    n->chk = -2;
+                    untracked.push(&untracked, n);
+                    j++;
+                    continue;
+                }
+                else if (S_ISDIR(statbuf.st_mode)) { //dir contains new
+                    q.push(&q, n);
+                    j++;
+                    continue;
+                }
+                else {
+                    printf("sss");
+                    exit(1);
+                }
+            }
+            if (j == cnt) { // removed, i
+                if (i > f->childscnt) break;
+                if (f->childs[i]->childscnt != -1) {
+                    q.push(&q, f->childs[i]);
+                    i++;
+                    continue;
+                }
+                f->childs[i]->chk = 2;
+                if (f->childs[i]->istrack == 1) {
+                    tracked.push(&tracked, f->childs[i]);
+                }
+                else {
+                    untracked.push(&untracked, f->childs[i]);
+                }
+                i++;
+                continue;
+            }
+            int res = strcmp(f->childs[i]->name, namelist[j]->d_name);
+            if (res == 0) {
+                if (f->childs[i]->childscnt != -1) { //dir
+                    q.push(&q, f->childs[i]);
+                    i++;
+                    j++;
+                    continue;
+                }
+                if (access(f->childs[i]->oripath, F_OK)) { //removed
+                    f->childs[i]->chk = 2; //rem
+                    
+                    if (f->childs[i]->istrack == 1)
+                        tracked.push(&tracked, f->childs[i]);
+                    else {
+                        untracked.push(&untracked, f->childs[i]);
+                    }
+                    i++;
+                    j++;
+                    continue;
+                }
+                if (lstat(f->childs[i]->oripath, &statbuf) < 0) {
+                    printf("fk");
+                    exit(1);
+                }
+                if (f->childs[i]->top == NULL) { //added from staging, new/tracking
+                    tracked.push(&tracked, f->childs[i]); //tracked newfile
+                    i++;
+                    j++;
+                    continue;
+                }
+                if (statbuf.st_mtime != f->childs[i]->top->statbuf.st_mtime) {//modified
+                    f->childs[i]->chk = 1; //mod
+                    printf("HEREsss\n\n");
+                    if (f->childs[i]->istrack == 1) 
+                        tracked.push(&tracked, f->childs[i]);
+                    else {
+                        untracked.push(&untracked, f->childs[i]);
+                    }
+                    i++;
+                    j++;
+                    continue;
+                }
+                else {
+                    if (f->childs[i]->chk != -2) printf("fucked"); //debug
+                   
+                    tracked.push(&tracked, f->childs[i]); //tracked newfile
+                    i++;
+                    j++;
+                    continue;
+                    
+                }
+            }
+            if (res < 0) { //removed staged / unstaged
+                if (f->childs[i]->childscnt != -1) { //dir that contains removed
+                    q.push(&q, f->childs[i]);
+                    i++;
+                    continue;
+                }
+                f->childs[i]->chk = 2;
+                if (f->childs[i]->istrack == 1) {
+                    tracked.push(&tracked, f->childs[i]);
+                }
+                else {
+                    untracked.push(&untracked, f->childs[i]);
+                }
+                i++;
+                continue;
+            }
+            if (res > 0) { //new unstaged.
+                // if (f->childs[i]->childscnt != -1) { //dir that contains removed change to jform
+                //     q.push(&q, f->childs[i]);
+                //     i++;
+                //     continue;
+                // }
+                filedir * n = newfile();
+                char nextpath[MAXPATH];
+                strcpy(nextpath, f->oripath);
+                strcat(nextpath, "/");
+                strcat(nextpath, namelist[j]->d_name);
+                strcpy(n->oripath, nextpath);
+                strcpy(n->name, namelist[j]->d_name);
+                if (lstat(nextpath, &statbuf) < 0) {
+                    printf("ff");
+                    exit(1);
+                }
+                if (S_ISREG(statbuf.st_mode)) {
+                    n->chk = -2;
+                    untracked.push(&untracked, n);
+                    j++;
+                    continue;
+                }
+                else if (S_ISDIR(statbuf.st_mode)) { //dir contains new
+                    q.push(&q, n);
+                    j++;
+                    continue;
+                }
+                else {
+                    printf("faa");
+                    exit(1);
+                }
+            }
+        }
+    }
+}
+
+void mkdirs(char * path) { //path is always dir
+    int res;
+    char ** args = split(path, "/", &res);
+    char temp[MAXPATH] = "";
+
+    for (int i =0 ;i < res; i++) {
+        strcat(temp, "/");
+        strcat(temp, args[i]);
+        if (access(temp, F_OK)) {
+            mkdir(temp, 0777);
+        }
+    }
+}
+
+int rmdirs(char * path) { //danger?
+    struct dirent ** namelist;
+    struct stat statbuf;
+    
+    if (lstat(path, &statbuf) < 0) return -1;
+    if (S_ISREG(statbuf.st_mode)) {
+        remove(path);
+    }
+    if (!S_ISDIR(statbuf.st_mode)) {
+        return -2;
+    }
+    int cnt;
+    if ((cnt = scandir(path, &namelist, NULL, alphasort)) < 0) {
+        return -1;
+    }
+    for (int i =0 ;i < cnt; i++) {
+        if (!strcmp(namelist[i]->d_name, ".") || !strcmp(namelist[i]->d_name, "..")) continue;
+        char nextpath[MAXPATH];
+        strcpy(nextpath, path);
+        strcat(nextpath, "/");
+        strcat(nextpath, namelist[i]->d_name);
+        if (lstat(nextpath, &statbuf) < 0) return -1;
+        if (S_ISDIR(statbuf.st_mode)) {
+            rmdirs(nextpath);
+        }
+        else {
+            remove(nextpath);
+        }
+    }
+    return rmdir(path);
+}
 
 
 /// @brief adds only FILE ****
@@ -600,11 +936,11 @@ void show_fs(filedir * cur, char * padding) {
 int load_staging_log() {
     char * cwd = getcwd(NULL, 0);
     // printf("%s", stagelogpath);
-    if (access(stagingpath, F_OK)) return -1;
+    if (access(staginglogpath, F_OK)) return -1;
     char buf[MAXPATH * 2];
     FILE * fp;
 
-    if ((fp = fopen(stagingpath, "rt")) == NULL) {
+    if ((fp = fopen(staginglogpath, "rt")) == NULL) {
         return -2;
     }
     while(1) {
@@ -627,21 +963,17 @@ int load_staging_log() {
     }
     return 0;
 }
-
-
-
-
 int load_commit_log() {
     struct stat statbuf;
 
     char * cwd = getcwd(NULL, 0);
 
     // printf("%s", stagelogpath);
-    if (access(commitpath, F_OK)) return -1;
+    if (access(commitlogpath, F_OK)) return -1;
     char buf[MAXPATH * 2];
     FILE * fp;
 
-    if ((fp = fopen(commitpath, "rt")) == NULL) {
+    if ((fp = fopen(commitlogpath, "rt")) == NULL) {
         return -2;
     }
     while(1) {
@@ -701,7 +1033,7 @@ int load_commit_log() {
         if (status != 2)
             v->statbuf = statbuf;
         // filedir * exists = searchExistingFile(target_path);
-        filedir * exists = addfiledir(f);
+        filedir * exists = addfiledir(f, 0);
         
         c->flink = exists;
         c->vlink = v;
@@ -720,17 +1052,27 @@ int save_staging_log(char * abpath, int mod) {
     // char stagelogpath[MAXPATH];
 
     // sprintf(stagelogpath, "%s/.repo/.staging.log", cwd);
-    if (access(stagingpath, F_OK)) return -1;
+    if (access(staginglogpath, F_OK)) return -1;
     char buf[MAXPATH * 2];
     FILE * fp;
 
-    if ((fp = fopen(stagingpath, "at")) == NULL) {
+    if ((fp = fopen(staginglogpath, "at")) == NULL) {
         return -2;
     }
     fprintf(fp, "%s \"%s\"\n", mod == 1 ? "add" : "remove", abpath);
 }
-int save_commit_log() {
-
+int save_commit_log(char * stamp, char * oripath, int mod) {
+    FILE * fp = fopen(commitlogpath, "a+");
+    char * msg;
+    if (mod == -2) msg = "new file: ";
+    else if (mod == 1) msg = "modified: ";
+    else if (mod == 2) msg = "removed: ";
+    else {
+        return -1;
+    }
+    fprintf(fp, "commit: \"%s\" - %s%s\n", stamp, msg, oripath);
+    fclose(fp);
+    return 0;
 }
 void show_staging_log() {
     stagelog* temp = head;
@@ -803,12 +1145,11 @@ void exithelp() {
 
 void (*helpfuncs[])(void) = {addhelp, removehelp, statushelp, commithelp, reverthelp, loghelp, helphelp, exithelp};
 
-
 void init() {
     char * cwd = getcwd(NULL, 0);
     if (cwd == NULL) exit(100);
-    sprintf(commitpath, "%s/.repo/.commit.log", cwd);
-    sprintf(stagingpath, "%s/.repo/.staging.log", cwd);
+    sprintf(commitlogpath, "%s/.repo/.commit.log", cwd);
+    sprintf(staginglogpath, "%s/.repo/.staging.log", cwd);
     sprintf(repopath, "%s/.repo", cwd);
     return;
 }

@@ -9,3 +9,6 @@
 #p1_20192419/lastest.c
 #p2_20192419/.repo/.staging.log
 .repo/*
+#p2_20192419/.repo/.staging.log
+#p2_20192419/playground/.repo/.commit.log
+#p2_20192419/playground/.repo/.staging.log

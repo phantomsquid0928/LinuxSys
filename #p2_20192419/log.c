@@ -32,7 +32,7 @@ int main(int argc, char * argv[]) {
         strcpy(version_path, repopath);
         strcat(version_path, "/");
         strcat(version_path, name);
-        printf("%s\n", version_path);
+        // printf("%s\n", version_path);
         char * real_versionpath = realpath(version_path, NULL);
         if (real_versionpath == NULL) {
             printf("no version directory\n");

@@ -1,6 +1,9 @@
 
 #include "phantomutils.h"
 
+queue q;
+queue revert_q;
+
 int main(int argc, char * argv[]) {
     if (argc == 1) {
         printf("ERROR <NAME> is not include\n");
@@ -44,22 +47,73 @@ int main(int argc, char * argv[]) {
     else {
         sprintf(purename, "%s", argv[1]);
     }
-    sprintf(targetpath, "/%s", purename);
-    if (access(targetpath   , F_OK) == 0) {
-        printf("%s is already exist in repo\n", purename);
-        exit(3);
-    }
-    if (head == NULL) //empty //test
-    {
-        printf("there is no staged file\n");
+    sprintf(targetpath, "/%s", purename); //.repo/~~ commit/
+    if (access(targetpath, F_OK)) { //not exists
+        printf("not existing version of commit\n");
         exit(4);
     }
 
-    
+    filedir * temp = version_cursor->root;
+    commitlog * selected = commithead;
 
-    // file * temp = version_cursor->head;
-    // while(temp) {
-        
-    // }
+    struct stat statbuf;
+    /**
+     * TODO: tree traverse of root(bfs) and recover to latest to version.
+     *       version exists -> recover version. if already exists then err: commit head is on this version.
+     *       not exists -> recover latest.
+    */
+    q = *initQueue();
+    q.push(&q, temp);
+
+    
+    int errorcode = 0;
+    while(!q.empty(&q)) {
+        filedir * t = q.front(&q);
+        q.pop(&q);
+        for(int i = 0; i <= t->childscnt; i++) {
+            filedir * n = t->childs[i];
+            filever * v = n->top;
+            if (n->childscnt != -1) //dir
+            {
+                q.push(&q, n);
+                continue;
+            }
+            if (lstat(n->oripath, &statbuf) < 0) {
+                exit(0);
+            }
+            if (!strcmp(n->top->version, purename)) {
+                //check if there is same file or not
+                if (access(n->oripath, F_OK)) { //deleted, just add to revert section
+                    revert_q.push(&revert_q, n);
+                    continue;
+                }
+                
+                if (n->top->statbuf.st_mtime != statbuf.st_mtime) { //exists but modified, revert to version
+                    revert_q.push(&revert_q,n);
+                }
+                else { //it is currently top now , err
+                    errorcode = 1;
+                    break;
+                }
+            }
+            else if (statbuf.st_mtime != n->top->statbuf.st_mtime) {
+                revert_q.push(&revert_q, n); //recover to latest, not deleted commit section
+            }
+
+        }
+        if (errorcode != 0) break;
+    }
+    q.clear(&q);
+    if (errorcode == 0) { //normal, revert.
+        while(!revert_q.empty(&revert_q)) {
+            filedir * t = revert_q.front(&revert_q);
+            revert_q.pop(&revert_q);
+            // printf("seleced %s: v.<%s>\n", t->name, t->);
+        }
+    }
+    while(selected) {
+        if (selected->vlink->version)
+        selected = selected->next;
+    }
 
 }
