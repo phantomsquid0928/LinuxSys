@@ -1021,9 +1021,9 @@ int load_commit_log() {
         filedir * f = newfile();
         filever * v = newversion();
         commitlog * c = newcommitlog();
-        // if (lstat(version_path, &statbuf) < 0 && status != 2) {
-        //     return -1; //.repo corrupted
-        // }
+        if (lstat(version_path, &statbuf) < 0 && status != 2) {
+            return -1; //.repo corrupted
+        }
         strcpy(f->name, name);
         strcpy(f->oripath, target_path);
         strcpy(f->path, version_path);

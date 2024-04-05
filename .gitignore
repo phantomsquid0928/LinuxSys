@@ -1,5 +1,6 @@
 *.o
 *.txt
+*.
 .vscode
 #p1_20192419/Untitled-1.c
 #p1_20192419/timestamptest.c
@@ -12,3 +13,12 @@
 #p2_20192419/.repo/.staging.log
 #p2_20192419/playground/.repo/.commit.log
 #p2_20192419/playground/.repo/.staging.log
+playground
+playground/*
+add
+commit
+help
+logremove
+revert
+ssu_repo
+status

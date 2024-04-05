@@ -39,9 +39,9 @@ int main(int argc, char * argv[]) {
     printf("helo");
     char targetpath[MAXPATH];
     strcpy(targetpath, repopath);
-    printf("%s\n", repopath);
-    printf("%s\n", staginglogpath);
-    printf("%s\n", commitlogpath);
+    // printf("%s\n", repopath);
+    // printf("%s\n", staginglogpath);
+    // printf("%s\n", commitlogpath);
     char purename[MAXDIR];
     if (strstr(argv[1], "\"") || strstr(argv[1], "'")) {
         sprintf(purename, "%s", substr(argv[1], 1, strlen(argv[1]) - 1));

@@ -71,15 +71,18 @@ int main(int argc, char * argv[]) {
     }
     
     // printf("HELLO");
-    printf("\nChanges to be commited:\n");
+    if (!tracked.empty(&tracked)) {
+        printf("\nChanges to be commited:\n");
+    }
     while(!tracked.empty(&tracked)) {
         filedir * temp = tracked.front(&tracked);
         tracked.pop(&tracked);
         char type[MAXDIR];
 
         if (temp->chk == -2) sprintf(type, "%s", "   new file : ");
-        if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
-        if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
+        else if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else continue;
         printf("%s\"%s\" \n", type, temp->oripath);
     }
     printf("\n");
