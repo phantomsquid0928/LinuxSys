@@ -39,9 +39,9 @@ int main(int argc, char * argv[]) {
     printf("helo");
     char targetpath[MAXPATH];
     strcpy(targetpath, repopath);
-    // printf("%s\n", repopath);
-    // printf("%s\n", staginglogpath);
-    // printf("%s\n", commitlogpath);
+    printf("%s\n", repopath);
+    printf("%s\n", staginglogpath);
+    printf("%s\n", commitlogpath);
     char purename[MAXDIR];
     if (strstr(argv[1], "\"") || strstr(argv[1], "'")) {
         sprintf(purename, "%s", substr(argv[1], 1, strlen(argv[1]) - 1));
@@ -57,11 +57,7 @@ int main(int argc, char * argv[]) {
         printf("%s is already exist in repo\n", purename);
         exit(3);
     }
-    if (head == NULL) //empty //test
-    {
-        printf("there is no staged file\n");
-        exit(4);
-    }
+    
     
     stagedtofs();
     int err = 0;
@@ -70,10 +66,17 @@ int main(int argc, char * argv[]) {
         exit(100);
     }
 
+    if (tracked.empty(&tracked) == 1) //empty //test
+    {
+        printf("Nothing to commit\n");
+        exit(0);
+    }
+
     char * cwd = getcwd(NULL, 0);
     int len = strlen(cwd);
 
     mkdir(targetpath, 0777);
+    printf("%s is under mkdir\n",targetpath);
 
 
     while(!tracked.empty(&tracked)) {
@@ -83,6 +86,7 @@ int main(int argc, char * argv[]) {
         int originfd, commitfd;
         if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
             printf("error while open file\n");
+            close(originfd);
             exit(1);
         }
         char curpath[MAXPATH];
@@ -97,11 +101,14 @@ int main(int argc, char * argv[]) {
         strcat(curpath, relpath);
 
         // printf("%s is under working\n", curpath);
-
-        mkdirs(targetpath);
+        
+        mkdirs(substr(curpath, 0, return_last_name(curpath)));
         if ((commitfd = open(curpath, O_WRONLY | O_CREAT)) < 0) {
             printf("failed to create commit");
-            rmdirs(targetpath);
+            printf("removing %s\n", targetpath);
+            // rmdirs(targetpath);
+            close(originfd);
+            close(commitfd);
             exit(1);
         }
 
@@ -117,7 +124,9 @@ int main(int argc, char * argv[]) {
         struct stat statbuf;
         if (lstat(f->oripath, &statbuf) < 0) {
             printf("failed to do lstat");
-            rmdirs(targetpath);
+            // rmdirs(targetpath);
+            close(commitfd);
+            close(originfd);
             exit(1);
         }
         temptime.modtime = statbuf.st_mtime;
@@ -133,7 +142,11 @@ int main(int argc, char * argv[]) {
 
         if (save_commit_log(purename, f->oripath, f->chk) < 0) {
             printf("failed to write log");
-            rmdirs(targetpath);
+            printf("%s %s %d\n", purename, f->oripath, f->chk);
+            //rmdirs(targetpath);
+            printf("removing %s\n", targetpath);
+            close(commitfd);
+            close(originfd);
             exit(1);
         }
         

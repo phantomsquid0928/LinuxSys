@@ -79,10 +79,15 @@ char * purifypath(char * path) {
     int cnt = 0;
     int mod = 0;
     char * newpath = (char*)malloc(sizeof(char) * (sizeof(path) + 1));
+    
+    if (strstr(path, "\"") == NULL && strstr(path, "'") == NULL) {
+        return realpath(path, 0);
+    }
     if (strstr(path, ".") != NULL) //relpath
     {
         mod = 1;
     }
+    printf("here");
     strcpy(newpath, "");
     char * arg = strtok(path, "/");
     char * argtemp;
@@ -532,9 +537,9 @@ filedir * addfiledir(filedir * target, int mod) { //always comes file
                     // if (mod == 0) {//from commit
                     temp->childs[end] = target;
                     temp->childscnt++;
-                    // if (mod == 1) {
-                    //     target->istrack = 1;
-                    // }
+                    if (mod == 1) {
+                        target->istrack = 1;
+                    }
                     printf("res\n");
                     return target;
                 }
@@ -640,7 +645,7 @@ void show_fs(filedir * cur, char * padding) {
     //     printf(" latest : %s\n", cur->top->version);
     //     return;
     // }
-    printf("%s", cur->name);
+    printf("%s/", cur->name);
     printf("  dir %p\n", cur);
     for (int i = 0;i < cur->childscnt + 1; i++) {
         char curpad[1000];
@@ -655,9 +660,9 @@ void show_fs(filedir * cur, char * padding) {
         }
         
         if (cur->childs[i]->childscnt == -1) { //file
-            printf("%s/%s", curpad, cur->childs[i]->name);
+            printf("%s%s", curpad, cur->childs[i]->name);
             printf(" file");
-            printf(" latest : %s %p\n", cur->childs[i]->top->version, cur->childs[i]);
+            printf(" latest : %s %p    chk ;%d  istracking : %d\n", cur->childs[i]->top->version, cur->childs[i], cur->chk, cur->istrack);
             continue;
         }
         else {
@@ -770,6 +775,7 @@ int makestatus() {
                     continue;
                 }
                 f->childs[i]->chk = 2;
+                // tracked.push(&tracked, f->childs[i]);
                 if (f->childs[i]->istrack == 1) {
                     tracked.push(&tracked, f->childs[i]);
                 }
@@ -787,23 +793,24 @@ int makestatus() {
                     j++;
                     continue;
                 }
-                if (access(f->childs[i]->oripath, F_OK)) { //removed
-                    f->childs[i]->chk = 2; //rem
+                // if (access(f->childs[i]->oripath, F_OK)) { //removed
+                //     f->childs[i]->chk = 2; //rem
                     
-                    if (f->childs[i]->istrack == 1)
-                        tracked.push(&tracked, f->childs[i]);
-                    else {
-                        untracked.push(&untracked, f->childs[i]);
-                    }
-                    i++;
-                    j++;
-                    continue;
-                }
+                //     if (f->childs[i]->istrack == 1)
+                //         tracked.push(&tracked, f->childs[i]);
+                //     else {
+                //         untracked.push(&untracked, f->childs[i]);
+                //     }
+                //     i++;
+                //     j++;
+                //     continue;
+                // }
                 if (lstat(f->childs[i]->oripath, &statbuf) < 0) {
                     printf("fk");
                     exit(1);
                 }
                 if (f->childs[i]->top == NULL) { //added from staging, new/tracking
+                    
                     tracked.push(&tracked, f->childs[i]); //tracked newfile
                     i++;
                     j++;
@@ -822,8 +829,15 @@ int makestatus() {
                     continue;
                 }
                 else {
-                    if (f->childs[i]->chk != -2) printf("fucked"); //debug
-                   
+                    
+                    // untracked.push(&untracked, f->childs[i]);
+            
+                    if (f->childs[i]->chk != -2) {
+                        printf("same as old"); //debug
+                        i++;
+                        j++;
+                        continue;
+                    }
                     tracked.push(&tracked, f->childs[i]); //tracked newfile
                     i++;
                     j++;
@@ -904,7 +918,7 @@ int rmdirs(char * path) { //danger?
     
     if (lstat(path, &statbuf) < 0) return -1;
     if (S_ISREG(statbuf.st_mode)) {
-        remove(path);
+        // remove(path);
     }
     if (!S_ISDIR(statbuf.st_mode)) {
         return -2;
@@ -924,10 +938,11 @@ int rmdirs(char * path) { //danger?
             rmdirs(nextpath);
         }
         else {
-            remove(nextpath);
+            // remove(nextpath);
         }
     }
-    return rmdir(path);
+    // return rmdir(path);
+    return 0;
 }
 
 

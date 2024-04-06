@@ -44,8 +44,11 @@ int main(int argc, char * argv[]) {
     /**
      * TODO: push dirty junks below into header
     */
+    show_fs(version_cursor->root, "");
 
     stagedtofs();
+
+    show_fs(version_cursor->root, "");
     // stagelog * temp = head;
 
     // while(temp) { //o logn logn
@@ -64,12 +67,13 @@ int main(int argc, char * argv[]) {
         
     //     temp = temp->next;
     // }
-    show_fs(version_cursor->root, "");
+    
     int errcode = 0;
-    if ((errcode = makestatus()) < 0) {
+    if ((errcode = makefs()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
         printf("%d error", errcode);
     }
-    
+    show_staging_log();
+    show_fs(version_cursor->root, "");
     // printf("HELLO");
     if (!tracked.empty(&tracked)) {
         printf("\nChanges to be commited:\n");
@@ -87,7 +91,10 @@ int main(int argc, char * argv[]) {
     }
     printf("\n");
 
-    printf("Untracked files: \n");
+    if (!untracked.empty(&untracked)) {
+        printf("Untracked files: \n");
+    }
+    
     while(!untracked.empty(&untracked)) {
         filedir * temp = untracked.front(&untracked);
         untracked.pop(&untracked);
