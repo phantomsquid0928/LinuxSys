@@ -22,6 +22,17 @@ int main(int argc, char * argv[]) {
         exit(4);
     }
     init();
+    init_version_controller();
+    initstatus(); 
+    //init q, tracked, untracked queue for makeUnionofMockReal() ->
+    // none + real = real so not calling commit will only load real files
+
+    int errcode;
+    if ((errcode = makeUnionofMockReal()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
+        printf("%d error", errcode);
+        exit(1);
+    }
+
     int loadres = 0;
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
@@ -30,6 +41,8 @@ int main(int argc, char * argv[]) {
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
+
+    show_fs(version_cursor->root, "");
     
     char * abpath = realpath(purepath, NULL);
     if (abpath == NULL) {
@@ -74,7 +87,7 @@ int main(int argc, char * argv[]) {
     char * temp = substr(abpath_copy, strlen(cwd), strlen(abpath_copy));
     strcat(relpath, temp);// need mod
     
-    if (addlogrecurs(abpath) == 0) { //trying to stage but all files were same... //warning abpath becomes NULL, use abpath_copy
+    if (managelogrecurs(abpath, 0) == 0) { //trying to stage but all files were same... //warning abpath becomes NULL, use abpath_copy
         printf("\"%s\" already exist in stage area\n", relpath);
         exit(0);
     }

@@ -1,10 +1,6 @@
 
 #include "phantomutils.h"
 
-queue q;
-queue untracked;
-queue tracked;
-
 
 int main(int argc, char * argv[]) {
     if (argc != 1) {
@@ -21,15 +17,10 @@ int main(int argc, char * argv[]) {
     //call init and init_version_controller to make path and cursor
     init();
     init_version_controller();
-    initstatus(); //must call this func to call makestatus,  initstatus -> stagedtofs -> makestatus routine
+    initstatus(); //must call this func to call initstatus -> load_commit_log -> makeUnionofMockReal -> load_staging_log ->store2pockets routine
 
-    if ((loadres = load_staging_log()) < 0) {
-        if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
-        }
-        // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
-        exit(3);
-    }
+
+    //get already existing commits from .repo
     if ((loadres = load_commit_log()) < 0) {
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
@@ -37,44 +28,43 @@ int main(int argc, char * argv[]) {
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
-    // show_commit_log(NULL);
+    show_commit_log(NULL);
     // show_staging_log();
     // show_fs(version_cursor->root, "");
 
     /**
      * TODO: push dirty junks below into header
     */
-    show_fs(version_cursor->root, "");
+    // show_fs(version_cursor->root, "");
 
-    stagedtofs();
+    /**
+     * TODO: change to mockfs toorist
+    */
+    // stagedtofs(); 
 
-    show_fs(version_cursor->root, "");
-    // stagelog * temp = head;
-
-    // while(temp) { //o logn logn
-    //     char * oripath = temp->log;
-    //     char * name = substr(oripath, return_last_name(oripath) + 1, strlen(oripath));
-    //     filedir * f = newfile();
-    //     strcpy(f->oripath, oripath);
-    //     strcpy(f->name, name);
-    //     //as this is temp file, there is no path (commitpath)
-    //     f->istrack = 1;
-    //     f->chk = -2; //newfile newflag
-    //     filedir * found = addfiledir(f, 1);
-    //     // if (found == NULL) { //staged new file, not 
-    //     //     temp->isnew = 1;
-    //     // }
-        
-    //     temp = temp->next;
-    // }
-    
+    //compare cur dir and commit (top)
     int errcode = 0;
-    if ((errcode = makefs()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
+    if ((errcode = makeUnionofMockReal()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
         printf("%d error", errcode);
+        exit(1);
     }
-    show_staging_log();
+    // show_staging_log();/
     show_fs(version_cursor->root, "");
-    // printf("HELLO");
+
+    //now load log (log now traverse mockfs that contains all files that changed)
+    //i can make this func also can manage istrack...?
+    if ((loadres = load_staging_log(0)) < 0) {
+        if (loadres == -1) {
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+        }
+        // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+        exit(3);
+    }
+
+    show_fs(version_cursor->root, "");
+
+    store2pockets();
+    // // printf("HELLO");
     if (!tracked.empty(&tracked)) {
         printf("\nChanges to be commited:\n");
     }
@@ -108,12 +98,12 @@ int main(int argc, char * argv[]) {
     printf("\n");
     
     
-    /**
-     * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
-     *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
-     *      
-     * 
-    */
+    // /**
+    //  * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
+    //  *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
+    //  *      
+    //  * 
+    // */
     
 
     // file * temp = version_cursor->head;

@@ -58,13 +58,27 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
     
-    
-    stagedtofs();
+    /**
+     * TODO: change this after status all fixeds
+    */
+    // stagedtofs();
     int err = 0;
-    if ((err = makestatus()) < 0) {
+    if ((err = makeUnionofMockReal()) < 0) {
         printf("error %d", err);
         exit(100);
     }
+
+
+
+
+
+
+
+
+/////////////////////before is completely same routine with status.c
+
+
+
 
     if (tracked.empty(&tracked) == 1) //empty //test
     {
