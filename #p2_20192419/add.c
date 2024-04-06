@@ -23,6 +23,10 @@ int main(int argc, char * argv[]) {
     }
     init();
     init_version_controller();
+
+    
+    /// routine of   initstatus -> makeUnionofMockReal -> load_staging_log -> managelogrecurs != 0 then -> save_staging_log : for add, remove.
+    // this routine above will only chks real files\ (not commited files), calc istracked on fs.
     initstatus(); 
     //init q, tracked, untracked queue for makeUnionofMockReal() ->
     // none + real = real so not calling commit will only load real files
@@ -42,7 +46,7 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
 
-    show_fs(version_cursor->root, "");
+    // show_fs(version_cursor->root, "");
     
     char * abpath = realpath(purepath, NULL);
     if (abpath == NULL) {

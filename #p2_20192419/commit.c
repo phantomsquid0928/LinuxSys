@@ -18,16 +18,12 @@ int main(int argc, char * argv[]) {
     //init is essential
     init();
     init_version_controller();
-    initstatus();
+    initstatus(); //must call this func to call 
+    ///initstatus -> load_commit_log -> makeUnionofMockReal -> load_staging_log ->store2pockets routine
+    
     
     int loadres;
-    if ((loadres = load_staging_log()) < 0) {
-        if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
-        }
-        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
-        exit(3);
-    }
+
     if ((loadres = load_commit_log()) < 0) {
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
@@ -68,16 +64,18 @@ int main(int argc, char * argv[]) {
         exit(100);
     }
 
+    if ((loadres = load_staging_log()) < 0) {
+        if (loadres == -1) {
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+        }
+        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+        exit(3);
+    }
 
-
-
-
-
+    store2pockets();
 
 
 /////////////////////before is completely same routine with status.c
-
-
 
 
     if (tracked.empty(&tracked) == 1) //empty //test
@@ -166,10 +164,5 @@ int main(int argc, char * argv[]) {
         
 
     }
-
-    // file * temp = version_cursor->head;
-    // while(temp) {
-        
-    // }
 
 }

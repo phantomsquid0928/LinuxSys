@@ -1,14 +1,11 @@
 
 #include "phantomutils.h"
 
-queue q;
-queue revert_q;
-
 int main(int argc, char * argv[]) {
     if (argc == 1) {
         printf("ERROR <NAME> is not include\n");
         printf("Usage: ");
-        helpfuncs[3]();
+        helpfuncs[4]();
         /**
          * TODO: usage
         */
@@ -21,25 +18,24 @@ int main(int argc, char * argv[]) {
     //init is essential
     init();
     init_version_controller();
+    initstatus(); //must call this func to call 
+    ///initstatus -> load_commit_log -> makeUnionofMockReal -> load_staging_log ->store2pockets routine
+    
+    
     int loadres;
-    if ((loadres = load_staging_log()) < 0) {
-        if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
-        }
-        // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
-        exit(3);
-    }
+
     if ((loadres = load_commit_log()) < 0) {
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
         }
-        // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
 
-
+    printf("helo");
     char targetpath[MAXPATH];
     strcpy(targetpath, repopath);
+    
     char purename[MAXDIR];
     if (strstr(argv[1], "\"") || strstr(argv[1], "'")) {
         sprintf(purename, "%s", substr(argv[1], 1, strlen(argv[1]) - 1));
@@ -47,73 +43,124 @@ int main(int argc, char * argv[]) {
     else {
         sprintf(purename, "%s", argv[1]);
     }
-    sprintf(targetpath, "/%s", purename); //.repo/~~ commit/
-    if (access(targetpath, F_OK)) { //not exists
-        printf("not existing version of commit\n");
-        exit(4);
+    strcat(targetpath, "/");
+    strcat(targetpath, purename);
+
+    printf("backup named; %s\n", targetpath);
+    if (access(targetpath, F_OK) == 0) {
+        printf("%s is already exist in repo\n", purename);
+        exit(3);
     }
-
-    filedir * temp = version_cursor->root;
-    commitlog * selected = commithead;
-
-    struct stat statbuf;
-    /**
-     * TODO: tree traverse of root(bfs) and recover to latest to version.
-     *       version exists -> recover version. if already exists then err: commit head is on this version.
-     *       not exists -> recover latest.
-    */
-    q = *initQueue();
-    q.push(&q, temp);
-
     
-    int errorcode = 0;
-    while(!q.empty(&q)) {
-        filedir * t = q.front(&q);
-        q.pop(&q);
-        for(int i = 0; i <= t->childscnt; i++) {
-            filedir * n = t->childs[i];
-            filever * v = n->top;
-            if (n->childscnt != -1) //dir
-            {
-                q.push(&q, n);
-                continue;
-            }
-            if (lstat(n->oripath, &statbuf) < 0) {
-                exit(0);
-            }
-            if (!strcmp(n->top->version, purename)) {
-                //check if there is same file or not
-                if (access(n->oripath, F_OK)) { //deleted, just add to revert section
-                    revert_q.push(&revert_q, n);
-                    continue;
-                }
-                
-                if (n->top->statbuf.st_mtime != statbuf.st_mtime) { //exists but modified, revert to version
-                    revert_q.push(&revert_q,n);
-                }
-                else { //it is currently top now , err
-                    errorcode = 1;
-                    break;
-                }
-            }
-            else if (statbuf.st_mtime != n->top->statbuf.st_mtime) {
-                revert_q.push(&revert_q, n); //recover to latest, not deleted commit section
-            }
+    /**
+     * TODO: change this after status all fixeds
+    */
+    // stagedtofs();
+    int err = 0;
+    if ((err = makeUnionofMockReal()) < 0) {
+        printf("error %d", err);
+        exit(100);
+    }
 
+    if ((loadres = load_staging_log()) < 0) {
+        if (loadres == -1) {
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
         }
-        if (errorcode != 0) break;
+        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+        exit(3);
     }
-    q.clear(&q);
-    if (errorcode == 0) { //normal, revert.
-        while(!revert_q.empty(&revert_q)) {
-            filedir * t = revert_q.front(&revert_q);
-            revert_q.pop(&revert_q);
-            // printf("seleced %s: v.<%s>\n", t->name, t->);
+
+    store2pockets();
+
+
+/////////////////////before is completely same routine with status.c
+
+
+    if (tracked.empty(&tracked) == 1) //empty //test
+    {
+        printf("Nothing to commit\n");
+        exit(0);
+    }
+
+    char * cwd = getcwd(NULL, 0);
+    int len = strlen(cwd);
+
+    mkdir(targetpath, 0777);
+    printf("%s is under mkdir\n",targetpath);
+
+
+    while(!tracked.empty(&tracked)) {
+        filedir * f = tracked.front(&tracked);
+        tracked.pop(&tracked);
+
+        int originfd, commitfd;
+        if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
+            printf("error while open file\n");
+            close(originfd);
+            exit(1);
         }
-    }
-    while(selected) {
-        if (selected->vlink->version)
-        selected = selected->next;
+        char curpath[MAXPATH];
+        char relpath[MAXPATH];
+        sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+
+        // printf("%s\n", relcdpath);
+
+
+        strcpy(curpath, targetpath);
+        strcat(curpath, "/");
+        strcat(curpath, relpath);
+
+        // printf("%s is under working\n", curpath);
+        
+        mkdirs(substr(curpath, 0, return_last_name(curpath)));
+        if ((commitfd = open(curpath, O_WRONLY | O_CREAT)) < 0) {
+            printf("failed to create commit");
+            printf("removing %s\n", targetpath);
+            // rmdirs(targetpath);
+            close(originfd);
+            close(commitfd);
+            exit(1);
+        }
+
+        /**
+         * TODO: mkdirs curpath...
+        */
+        char buf[4096];
+        int len;
+        while((len = read(originfd, buf, sizeof(buf))) > 0) {
+            write(commitfd, buf, len);
+        }
+        struct utimbuf temptime;
+        struct stat statbuf;
+        if (lstat(f->oripath, &statbuf) < 0) {
+            printf("failed to do lstat");
+            // rmdirs(targetpath);
+            close(commitfd);
+            close(originfd);
+            exit(1);
+        }
+        temptime.modtime = statbuf.st_mtime;
+        temptime.actime = statbuf.st_atime;
+        utime(curpath, &temptime);
+        
+        close(originfd);
+        close(commitfd);
+
+        /**
+         * TODO: save_commit_log queue, flush 형태로 바꾸기?
+        */
+
+        if (save_commit_log(purename, f->oripath, f->chk) < 0) {
+            printf("failed to write log");
+            printf("%s %s %d\n", purename, f->oripath, f->chk);
+            //rmdirs(targetpath);
+            printf("removing %s\n", targetpath);
+            close(commitfd);
+            close(originfd);
+            exit(1);
+        }
+        
+
     }
 
 }

@@ -7,9 +7,6 @@ int main(int argc, char * argv[]) {
         printf("ERROR no args allowed\n");
         printf("Usage: ");
         helpfuncs[2]();
-        /**
-         * TODO: usage
-        */
         exit(1);
     }
     int loadres;
@@ -28,19 +25,9 @@ int main(int argc, char * argv[]) {
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
-    show_commit_log(NULL);
+    // show_commit_log(NULL);
     // show_staging_log();
     // show_fs(version_cursor->root, "");
-
-    /**
-     * TODO: push dirty junks below into header
-    */
-    // show_fs(version_cursor->root, "");
-
-    /**
-     * TODO: change to mockfs toorist
-    */
-    // stagedtofs(); 
 
     //compare cur dir and commit (top)
     int errcode = 0;
@@ -96,20 +83,4 @@ int main(int argc, char * argv[]) {
         printf("%s\"%s\" \n", type, temp->oripath);
     }
     printf("\n");
-    
-    
-    // /**
-    //  * TODO: scandir cwd -> make list of files -> loop list -> find from loglist -> if not exists then 'untracked'
-    //  *       exists but modified-> 'modified' exists in loop list but not exists in scandir -> 'removed' exists but same : X
-    //  *      
-    //  * 
-    // */
-    
-
-    // file * temp = version_cursor->head;
-    // loglist * temp2 = head;
-    // while(temp) {
-    //     commitlog * latest = temp->top;
-        
-    // }
 }

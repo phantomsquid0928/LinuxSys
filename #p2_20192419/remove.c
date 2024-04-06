@@ -22,8 +22,11 @@ int main(int argc, char * argv[]) {
         exit(4);
     }
     init();
+
+    /// routine of   initstatus -> makeUnionofMockReal -> load_staging_log -> managelogrecurs != 0 then -> save_staging_log : for add, remove.
+    // this routine above will only chks real files\ (not commited files), calc istracked on fs.
     init_version_controller();
-    initstatus();
+    initstatus(); 
 
     int errcode;
     if ((errcode = makeUnionofMockReal()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
@@ -41,7 +44,7 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
 
-    show_fs(version_cursor->root, "");
+    // show_fs(version_cursor->root, "");
     
     char * abpath = realpath(purepath, NULL);
     if (abpath == NULL) {

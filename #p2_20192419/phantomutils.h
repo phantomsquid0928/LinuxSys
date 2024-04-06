@@ -328,6 +328,7 @@ int managelogrecurs(char * target, int mod) {
     // char * cwd = getcwd(NULL, 0);
     filedir * f = search_filedir(target); //logw logn
     // printf("foudn : %s\n\n", f->oripath);
+    if (f == NULL) return 0;
 
     if (f->childscnt == -1) {
         if(mod == 0) {//add
@@ -373,6 +374,7 @@ int managelogrecurs(char * target, int mod) {
     return res;
 }
 
+/// @deprecated no longer used, replaced to managelogrecurs routine.
 /// @brief addlog recursively which exists in realfs.
 /// @param target 
 /// @return succeed?
@@ -417,6 +419,7 @@ int addlogrecurs(char * target) {
     return res;
 }
 
+/// @deprecated no longer used
 /// @brief 
 /// @param target 
 /// @return 0 fail 1 succeed -> if 0 then no target exists 1 -> make log
@@ -528,19 +531,18 @@ int addversion(filedir * f, filever * t) {
  * TODO: add stamppath on dir
 */
 /// @brief adds filedir by tree search
-/// @param mod 0 from commit 1 from stage, temp
 /// @param target 
 /// @return 
 /// @todo mod
-filedir * addfiledir(filedir * target, int mod) { //always comes file
-    printf("called");
+filedir * addfiledir(filedir * target) { //always comes file
+    // printf("called");
     filedir * temp = version_cursor->root;
     char * relpath = substr(target->oripath, strlen(temp->oripath) + 1, strlen(target->oripath));
 
-    printf("%s\n", relpath);
+    // printf("%s\n", relpath);
     int res;
     char ** args = split(relpath, "/", &res);
-    if (!strcmp(target->oripath, temp->oripath) && mod == 1) { // root is ontrack
+    if (!strcmp(target->oripath, temp->oripath)) { // root is ontrack
         temp->istrack = 1;
         free(target);
         return temp;
@@ -549,22 +551,22 @@ filedir * addfiledir(filedir * target, int mod) { //always comes file
     char curpath[MAXPATH];
     strcpy(curpath, temp->oripath); //root
     for(int i= 0;i < res; i++) {
-        printf("cur : %s\n", temp->oripath);
+        // printf("cur : %s\n", temp->oripath);
         strcat(curpath, "/");
         strcat(curpath, args[i]);
-        printf("path: %s\n", curpath);
+        // printf("path: %s\n", curpath);
         if (temp->childscnt != -1) {
             // for (int j = 0; j < temp->childscnt + 1; j++) {
             //     printf("member : %s\n", temp->childs[j]->name);
             // }
-            printf("\n");
+            // printf("\n");
             int start = 0;
             int end = temp->childscnt + 1;
             int chk = 0;
             for (int j = 0; j < 30; j++) { //can handle 2 ^ 30filedirs in same dir, may cause err
                 int mid = start + end >> 1;
                 int res = strcmp(temp->childs[mid]->name, args[i]);
-                printf("res : %d %d %d, %s  :  %s\n",res, start, end, temp->childs[mid]->name, args[i]);
+                // printf("res : %d %d %d, %s  :  %s\n",res, start, end, temp->childs[mid]->name, args[i]);
                 if (res == 0) { //there is same one, found real quick
                     chk = 1;
                     break;
@@ -580,12 +582,8 @@ filedir * addfiledir(filedir * target, int mod) { //always comes file
                 int mid = start + end >> 1;
                 //same, dir or file exists
                 printf("exists!\n");
-                if (mod == 1) {
-                    temp->childs[mid]->istrack = 1;
-                }
                 if (i == res - 1) { //file
-                    if (mod != 1)
-                        addversion(temp->childs[mid], target->top);
+                    addversion(temp->childs[mid], target->top);
                     free(target);
                     return temp->childs[mid];
                 }
@@ -595,7 +593,7 @@ filedir * addfiledir(filedir * target, int mod) { //always comes file
                 
             }
             else { //file or dir not exists
-                printf("here, %d %d", temp->childscnt, end);
+                // printf("here, %d %d", temp->childscnt, end);
                 temp->childs = (filedir **)realloc(temp->childs, sizeof(filedir*) * (temp->childscnt + 2));// 3-> 4ro  5
 
                 for (int j = temp->childscnt; j >= end; j--) {
@@ -606,20 +604,14 @@ filedir * addfiledir(filedir * target, int mod) { //always comes file
                     // if (mod == 0) {//from commit
                     temp->childs[end] = target;
                     temp->childscnt++;
-                    if (mod == 1) {
-                        target->istrack = 1;
-                    }
-                    printf("res\n");
+                    // printf("res\n");
                     return target;
                 }
                 else { //no dir...
-                    printf("seeking\n");
+                    // printf("seeking\n");
                     filedir * newfiledir = newfile();
                     strcpy(newfiledir->name, args[i]);
                     strcpy(newfiledir->oripath, curpath);
-                    if (mod == 1) {
-                        newfiledir->istrack = 1;
-                    }
                     temp->childs[end] = newfiledir;
                     temp->childscnt++;
                     temp = temp->childs[end];
@@ -629,25 +621,21 @@ filedir * addfiledir(filedir * target, int mod) { //always comes file
         }
         else { //cur dir has no child
             if (i == res - 1) {// file {
-                printf("adding bare file\n\n");
+                // printf("adding bare file\n\n");
                 temp->childs = (filedir**)malloc(sizeof(filedir*));
                 temp->childs[0] = target;
-                if (mod == 1) {
-                    temp->childs[0]->istrack = 1;
-                }
+                
                 temp->childscnt = 0;
                 return target;
             }
             else { // not yet, keep adding empty dir
-                printf("adding new dir\n");
+                // printf("adding new dir\n");
                 temp->childs = (filedir**)malloc(sizeof(filedir*));
                 filedir * newfiledir = newfile();
                 strcpy(newfiledir->name, args[i]);
                 strcpy(newfiledir->oripath, curpath);
                 temp->childs[0] = newfiledir;
-                if (mod == 1) {
-                    temp->childs[0]->istrack = 1;
-                }
+    
                 temp->childscnt = 0;
                 temp = temp->childs[0];
             }
@@ -744,24 +732,6 @@ void show_fs(filedir * cur, char * padding) {
     }
 }
 
-// void stagedtofs() {
-//     stagelog * temp = head;
-
-//     while(temp) { //o logn logn
-//         char * oripath = temp->log;
-//         char * name = substr(oripath, return_last_name(oripath) + 1, strlen(oripath));
-//         filedir * f = newfile();
-//         strcpy(f->oripath, oripath);
-//         strcpy(f->name, name);
-//         //as this is temp file, there is no path (commitpath)
-//         f->istrack = 1;
-//         f->chk = -2; //newfile newflag
-//         filedir * found = addfiledir(f, 1);
-        
-//         temp = temp->next;
-//     }
-// }
-
 
 queue q;
 queue tracked;
@@ -791,9 +761,18 @@ int makeUnionofMockReal() {
     while(!q.empty(&q)) { // two pointer 사용 필요
         filedir * f = q.front(&q);
         q.pop(&q);
-        if ((cnt = scandir(f->oripath, &namelist, NULL, alphasort)) < 0) { //whole dir erased
-            return -1;
+
+        int isbonked = 0;
+        if (access(f->oripath, F_OK)) { //dir / file bonked...
+            isbonked = 1;
         }
+        if ((cnt = scandir(f->oripath, &namelist, NULL, alphasort)) < 0) { //whole dir erased
+            if (isbonked != 1) {
+                return -1;
+            }
+            cnt = 0;
+        }
+
         //
         int i = 0, j = 0;
         int rescnt = 0;
@@ -852,7 +831,6 @@ int makeUnionofMockReal() {
                     continue;
                 }
                 f->childs[i]->chk = 2;
-                // tracked.push(&tracked, f->childs[i]);
                
                 i++;
                 continue;
@@ -860,6 +838,7 @@ int makeUnionofMockReal() {
 
 
             // printf("WHY");
+            printf("compareing %s %s\n", f->childs[i]->name, namelist[j]->d_name);
             int res = strcmp(f->childs[i]->name, namelist[j]->d_name);
             if (res == 0) {
                 tchild[rescnt] = f->childs[i];
@@ -881,12 +860,7 @@ int makeUnionofMockReal() {
                     printf("fk");
                     return -1;
                 }
-                // if (f->childs[i]->top == NULL) { //added from staging, new/tracking
-                //     f->childs[i]->chk = -2;
-                //     i++;
-                //     j++;
-                //     continue;
-                // }
+                
                 if (statbuf.st_mtime != f->childs[i]->top->statbuf.st_mtime) {//modified
                     f->childs[i]->chk = 1; //mod
                    
@@ -898,9 +872,7 @@ int makeUnionofMockReal() {
                     /**
                      * TODO: md5 here
                     */
-                    // untracke
-                    // printf("WEERWERW exists?");
-                    f->childs[i]->chk = -2; 
+                    f->childs[i]->chk = -1; 
                     // tracked.push(&tracked, f->childs[i]); //tracked newfile
                     i++;
                     j++;
@@ -987,9 +959,11 @@ int store2pockets() {
                 continue;
             }
             if (child->istrack == 1) {
+                if (child->chk == -1) continue;
                 tracked.push(&tracked, child);
             }
             else {
+                if (child->chk == -1) continue;
                 untracked.push(&untracked, child);
             }
         }
@@ -1095,7 +1069,7 @@ int load_commit_log() {
         if (res == EOF) break;
         fgetc(fp);
         int argc = 0;
-        printf("%s\n", buf);
+        // printf("%s\n", buf);
         char ** args;
         args = split(buf, "-", &argc);
 
@@ -1147,7 +1121,7 @@ int load_commit_log() {
         if (status != 2)
             v->statbuf = statbuf;
         // filedir * exists = searchExistingFile(target_path);
-        filedir * exists = addfiledir(f, 0);
+        filedir * exists = addfiledir(f);
         
         c->flink = exists;
         c->vlink = v;
