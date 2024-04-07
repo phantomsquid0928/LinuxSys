@@ -67,7 +67,7 @@ int main(int argc, char * argv[]) {
 
         if (temp->chk == -2) sprintf(type, "%s", "   new file : ");
         else if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
-        else if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else if (temp->chk == 2) sprintf(type, "%s", "   removed : ");
         else {
             printf("OMG");
             exit(1);
@@ -87,7 +87,7 @@ int main(int argc, char * argv[]) {
 
         if (temp->chk == -2) sprintf(type, "%s", "   new file : ");
         else if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
-        else if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else if (temp->chk == 2) sprintf(type, "%s", "   removed : ");
         else {
             printf("OMG");
             exit(1);

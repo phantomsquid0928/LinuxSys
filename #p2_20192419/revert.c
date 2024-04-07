@@ -47,8 +47,8 @@ int main(int argc, char * argv[]) {
     strcat(targetpath, purename);
 
     printf("backup named; %s\n", targetpath);
-    if (access(targetpath, F_OK) == 0) {
-        printf("%s is already exist in repo\n", purename);
+    if (access(targetpath, F_OK)) { //not existing commit.
+        printf("\"%s\" is not exist in repo\n", purename);
         exit(3);
     }
     
@@ -76,91 +76,93 @@ int main(int argc, char * argv[]) {
 /////////////////////before is completely same routine with status.c
 
 
-    if (tracked.empty(&tracked) == 1) //empty //test
-    {
-        printf("Nothing to commit\n");
-        exit(0);
-    }
-
-    char * cwd = getcwd(NULL, 0);
-    int len = strlen(cwd);
-
-    mkdir(targetpath, 0777);
-    printf("%s is under mkdir\n",targetpath);
 
 
-    while(!tracked.empty(&tracked)) {
-        filedir * f = tracked.front(&tracked);
-        tracked.pop(&tracked);
+    // if (tracked.empty(&tracked) == 1) //empty //test
+    // {
+    //     printf("Nothing to commit\n");
+    //     exit(0);
+    // }
 
-        int originfd, commitfd;
-        if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
-            printf("error while open file\n");
-            close(originfd);
-            exit(1);
-        }
-        char curpath[MAXPATH];
-        char relpath[MAXPATH];
-        sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+    // char * cwd = getcwd(NULL, 0);
+    // int len = strlen(cwd);
 
-        // printf("%s\n", relcdpath);
+    // mkdir(targetpath, 0777);
+    // printf("%s is under mkdir\n",targetpath);
 
 
-        strcpy(curpath, targetpath);
-        strcat(curpath, "/");
-        strcat(curpath, relpath);
+    // while(!tracked.empty(&tracked)) {
+    //     filedir * f = tracked.front(&tracked);
+    //     tracked.pop(&tracked);
 
-        // printf("%s is under working\n", curpath);
+    //     int originfd, commitfd;
+    //     if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
+    //         printf("error while open file\n");
+    //         close(originfd);
+    //         exit(1);
+    //     }
+    //     char curpath[MAXPATH];
+    //     char relpath[MAXPATH];
+    //     sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+
+    //     // printf("%s\n", relcdpath);
+
+
+    //     strcpy(curpath, targetpath);
+    //     strcat(curpath, "/");
+    //     strcat(curpath, relpath);
+
+    //     // printf("%s is under working\n", curpath);
         
-        mkdirs(substr(curpath, 0, return_last_name(curpath)));
-        if ((commitfd = open(curpath, O_WRONLY | O_CREAT)) < 0) {
-            printf("failed to create commit");
-            printf("removing %s\n", targetpath);
-            // rmdirs(targetpath);
-            close(originfd);
-            close(commitfd);
-            exit(1);
-        }
+    //     mkdirs(substr(curpath, 0, return_last_name(curpath)));
+    //     if ((commitfd = open(curpath, O_WRONLY | O_CREAT)) < 0) {
+    //         printf("failed to create commit");
+    //         printf("removing %s\n", targetpath);
+    //         // rmdirs(targetpath);
+    //         close(originfd);
+    //         close(commitfd);
+    //         exit(1);
+    //     }
 
-        /**
-         * TODO: mkdirs curpath...
-        */
-        char buf[4096];
-        int len;
-        while((len = read(originfd, buf, sizeof(buf))) > 0) {
-            write(commitfd, buf, len);
-        }
-        struct utimbuf temptime;
-        struct stat statbuf;
-        if (lstat(f->oripath, &statbuf) < 0) {
-            printf("failed to do lstat");
-            // rmdirs(targetpath);
-            close(commitfd);
-            close(originfd);
-            exit(1);
-        }
-        temptime.modtime = statbuf.st_mtime;
-        temptime.actime = statbuf.st_atime;
-        utime(curpath, &temptime);
+    //     /**
+    //      * TODO: mkdirs curpath...
+    //     */
+    //     char buf[4096];
+    //     int len;
+    //     while((len = read(originfd, buf, sizeof(buf))) > 0) {
+    //         write(commitfd, buf, len);
+    //     }
+    //     struct utimbuf temptime;
+    //     struct stat statbuf;
+    //     if (lstat(f->oripath, &statbuf) < 0) {
+    //         printf("failed to do lstat");
+    //         // rmdirs(targetpath);
+    //         close(commitfd);
+    //         close(originfd);
+    //         exit(1);
+    //     }
+    //     temptime.modtime = statbuf.st_mtime;
+    //     temptime.actime = statbuf.st_atime;
+    //     utime(curpath, &temptime);
         
-        close(originfd);
-        close(commitfd);
+    //     close(originfd);
+    //     close(commitfd);
 
-        /**
-         * TODO: save_commit_log queue, flush 형태로 바꾸기?
-        */
+    //     /**
+    //      * TODO: save_commit_log queue, flush 형태로 바꾸기?
+    //     */
 
-        if (save_commit_log(purename, f->oripath, f->chk) < 0) {
-            printf("failed to write log");
-            printf("%s %s %d\n", purename, f->oripath, f->chk);
-            //rmdirs(targetpath);
-            printf("removing %s\n", targetpath);
-            close(commitfd);
-            close(originfd);
-            exit(1);
-        }
+    //     if (save_commit_log(purename, f->oripath, f->chk) < 0) {
+    //         printf("failed to write log");
+    //         printf("%s %s %d\n", purename, f->oripath, f->chk);
+    //         //rmdirs(targetpath);
+    //         printf("removing %s\n", targetpath);
+    //         close(commitfd);
+    //         close(originfd);
+    //         exit(1);
+    //     }
         
 
-    }
+    // }
 
 }

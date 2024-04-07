@@ -110,7 +110,7 @@ int main(int argc, char * argv[]) {
         strcat(curpath, relpath);
 
         printf("%s is under working\n", curpath);
-        printf("remove target will be %s", targetpath);
+        printf("remove target will be %s\n", targetpath);
         
         if (f->chk != 2) {
             mkdirs(substr(curpath, 0, return_last_name(curpath)));
@@ -177,7 +177,7 @@ int main(int argc, char * argv[]) {
         
         if (f->chk == -2) sprintf(type, "%s", "   new file : ");
         else if (f->chk == 1) sprintf(type, "%s", "   modified : ");
-        else if (f->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else if (f->chk == 2) sprintf(type, "%s", "   removed : ");
         else {
             printf("EROROROOR");
             exit(1);

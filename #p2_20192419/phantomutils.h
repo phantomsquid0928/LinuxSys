@@ -582,7 +582,7 @@ filedir * addfiledir(filedir * target) { //always comes file
             if (chk == 1) { 
                 int mid = start + end >> 1;
                 //same, dir or file exists
-                printf("exists!\n");
+                // printf("exists!\n");
                 if (i == res - 1) { //file
                     addversion(temp->childs[mid], target->top);
                     free(target);
@@ -860,7 +860,7 @@ int makeUnionofMockReal() {
 
 
             // printf("WHY");
-            printf("compareing %s %s\n", f->childs[i]->name, namelist[j]->d_name);
+            // printf("compareing %s %s\n", f->childs[i]->name, namelist[j]->d_name);
             int res = strcmp(f->childs[i]->name, namelist[j]->d_name);
             if (res == 0) {
                 tchild[rescnt] = f->childs[i];
