@@ -52,6 +52,11 @@ int main(int argc, char * argv[]) {
 
     store2pockets();
     // // printf("HELLO");
+
+    if (tracked.empty(&tracked) && untracked.empty(&untracked)) {
+        printf("\nNothing to commit\n");
+        exit(0);
+    }
     if (!tracked.empty(&tracked)) {
         printf("\nChanges to be commited:\n");
     }
@@ -63,7 +68,10 @@ int main(int argc, char * argv[]) {
         if (temp->chk == -2) sprintf(type, "%s", "   new file : ");
         else if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
         else if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
-        else continue;
+        else {
+            printf("OMG");
+            exit(1);
+        }
         printf("%s\"%s\" \n", type, temp->oripath);
     }
     printf("\n");
@@ -78,8 +86,12 @@ int main(int argc, char * argv[]) {
         char type[MAXDIR];
 
         if (temp->chk == -2) sprintf(type, "%s", "   new file : ");
-        if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
-        if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else if (temp->chk == 1) sprintf(type, "%s", "   modified : ");
+        else if (temp->chk == 2) sprintf(type, "%s", "   deleted : ");
+        else {
+            printf("OMG");
+            exit(1);
+        }
         printf("%s\"%s\" \n", type, temp->oripath);
     }
     printf("\n");

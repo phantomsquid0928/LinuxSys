@@ -206,7 +206,7 @@ queue * initQueue() {
 
 typedef struct filever {
     char version[MAXDIR];
-    int status;     //0 added 1 mod 2 removed
+    int status;     //-2 added -1: existing    1 mod 2 removed   indicates action on that version of commit.
     struct stat statbuf;
     struct filever * next;
 }filever;
@@ -217,7 +217,7 @@ typedef struct filedir {
     char path[MAXPATH];// version path
     char oripath[MAXPATH]; //original path
     filever * top; //latest
-    int chk;       //indicates whether it is target of commit chk = -1 : existing, no change   chk = 0 new    chk= 1 modify   chk= 2 remove
+    int chk;       //indicates whether it is target of commit: compared to top: chk = -1 : existing, no change   chk = 0 new    chk= 1 modify   chk= 2 remove
     int istrack;   //chk whether this file is being tracked 0 : no 1 : yes
     filever * target; //use when make revert?
 
@@ -506,6 +506,7 @@ filedir * newfile() {
 filever * newversion() {
     filever * temp = (filever*)malloc(sizeof(filever));
     temp->next = NULL;
+    temp->status = -1; //existing... 0 -> -1;
     return temp;
 }
 commitlog * newcommitlog() { //only directs file
@@ -721,7 +722,8 @@ void show_fs(filedir * cur, char * padding) {
         if (cur->childs[i]->childscnt == -1) { //file
             printf("%s%s", curpad, cur->childs[i]->name);
             printf(" file");
-            printf(" latest : %s %p    chk ;%d  istracking : %d\n", cur->childs[i]->top->version, cur->childs[i], cur->childs[i]->chk, cur->childs[i]->istrack);
+            printf(" latest : %s %p    chk ;%d status: %d istracking : %d\n", cur->childs[i]->top->version
+            , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->top->status, cur->childs[i]->istrack);
             continue;
         }
         else {
@@ -735,11 +737,15 @@ void show_fs(filedir * cur, char * padding) {
 
 queue q;
 queue tracked;
+int plus;
+int minus;
 queue untracked;
 void initstatus(){
     q = *initQueue();
     tracked = *initQueue();
     untracked = *initQueue();
+    plus = 0;
+    minus = 0;
 }
 
 /// @brief initstatus() is essential, cmps log files and real files, then merge them into 1
@@ -798,6 +804,7 @@ int makeUnionofMockReal() {
                 strcpy(n->oripath, nextpath);
                 strcpy(n->name, namelist[j]->d_name);
 
+                filever * v = newversion();
                 tchild[rescnt] = n;
 
                 rescnt++;
@@ -806,7 +813,9 @@ int makeUnionofMockReal() {
                     printf("sssssss");
                     return -1;
                 }
-
+                v->statbuf = statbuf;
+                v->status = -2;
+                addversion(n, v);
                 if (S_ISREG(statbuf.st_mode)) {
                     j++;
                     continue;
@@ -830,8 +839,21 @@ int makeUnionofMockReal() {
                     i++;
                     continue;
                 }
+
+                if (f->childs[i]->top->status == 2) {
+                    f->childs[i]->chk = -1; //removed long time ago and keeping its state
+                    i++;
+                    continue;
+                }
+                else {
+                    f->childs[i]->chk = 2; //removed right before.
+                }
                 f->childs[i]->chk = 2;
-               
+
+                filever * v = newversion();
+                v->status = 2;
+                addversion(f->childs[i], v);
+
                 i++;
                 continue;
             }
@@ -849,21 +871,45 @@ int makeUnionofMockReal() {
                     j++;
                     continue;
                 }
-                if (access(f->childs[i]->oripath, F_OK)) { //removed
-                    f->childs[i]->chk = 2; //rem
-        
-                    i++;
-                    j++;
-                    continue;
-                }
+                // if (access(f->childs[i]->oripath, F_OK)) { //removed
+                //     printf("YOU CALLED?");
+                //     if (f->childs[i]->top->status == 2) {
+                //         f->childs[i]->chk = -1; //removed long time ago and keeping its state
+                //         i++;
+                //         j++;
+                //         continue;
+                //     }
+                //     else {
+                //         f->childs[i]->chk = 2; //removed right before.
+                //     }
+                    
+                //     filever * v = newversion();
+                //     v->status = 2;
+                //     addversion(f->childs[i], v);
+                //     i++;
+                //     j++;
+                //     continue;
+                // }
                 if (lstat(f->childs[i]->oripath, &statbuf) < 0) {
                     printf("fk");
                     return -1;
                 }
-                
+                if (f->childs[i]->top->status == 2) { //file that has same name with commited, deleted  come back here...
+                    f->childs[i]->chk = -2; //new! 
+                    filever * v = newversion();
+                    v->statbuf = statbuf;
+                    v->status = -2;
+                    addversion(f->childs[i], v);
+                    i++;
+                    j++;
+                    continue;
+                }
                 if (statbuf.st_mtime != f->childs[i]->top->statbuf.st_mtime) {//modified
                     f->childs[i]->chk = 1; //mod
-                   
+                    filever * v = newversion();
+                    v->statbuf = statbuf;
+                    v->status = 1;
+                    addversion(f->childs[i], v);
                     i++;
                     j++;
                     continue;
@@ -887,7 +933,19 @@ int makeUnionofMockReal() {
                     i++;
                     continue;
                 }
-                f->childs[i]->chk = 2;
+
+                if (f->childs[i]->top->status == 2) {
+                    f->childs[i]->chk = -1; //removed long time ago and keeping its state
+                    i++;
+                    continue;
+                }
+
+                f->childs[i]->chk = 2; //removed right before.
+
+                filever * v = newversion();
+                v->status = 2;
+                addversion(f->childs[i], v);
+
                 i++;
                 continue;
             }
@@ -899,6 +957,7 @@ int makeUnionofMockReal() {
                 strcat(nextpath, namelist[j]->d_name);
                 strcpy(n->oripath, nextpath);
                 strcpy(n->name, namelist[j]->d_name);
+                filever * v = newversion();
 
                 tchild[rescnt] = n;
                 rescnt++;
@@ -907,9 +966,11 @@ int makeUnionofMockReal() {
                     printf("ff");
                     exit(1);
                 }
+                v->statbuf = statbuf;
+                v->status = -2;
+                addversion(n, v);
                 if (S_ISREG(statbuf.st_mode)) {
                     n->chk = -2;
-                    // untracked.push(&untracked, n);
                     j++;
                     continue;
                 }
@@ -958,9 +1019,27 @@ int store2pockets() {
                 q.push(&q, child);
                 continue;
             }
+            
             if (child->istrack == 1) {
                 if (child->chk == -1) continue;
                 tracked.push(&tracked, child);
+                if (child->chk == -2) {//new
+                    plus += child->top->statbuf.st_size;
+                }
+                if (child->chk == 1) { //mod
+                    filever * prev = child->top->next;
+                    int diff = child->top->statbuf.st_size - prev->statbuf.st_size;
+                    if (diff > 0) {
+                        plus += diff;
+                    }
+                    else {
+                        minus -= diff;
+                    }
+                }
+                if (child->chk == 2) {//del
+                    filever * prev = child->top->next;
+                    minus += prev->statbuf.st_size;
+                }
             }
             else {
                 if (child->chk == -1) continue;
@@ -992,6 +1071,7 @@ int rmdirs(char * path) { //danger?
     if (lstat(path, &statbuf) < 0) return -1;
     if (S_ISREG(statbuf.st_mode)) {
         // remove(path);
+        printf("R> removing fi %s\n", path);
     }
     if (!S_ISDIR(statbuf.st_mode)) {
         return -2;
@@ -1012,9 +1092,11 @@ int rmdirs(char * path) { //danger?
         }
         else {
             // remove(nextpath);
+            printf("R> removing fil %s\n", nextpath);
         }
     }
     // return rmdir(path);
+    printf("R> removing dir %s\n", path);
     return 0;
 }
 
@@ -1081,7 +1163,7 @@ int load_commit_log() {
             target_temp = substr(args[1], 11, strlen(args[1]));
             // printf("  new : :%s:\n", target_name);
             // char * name = substr(target_path, );
-            status = 0;
+            status = -2;
         }
         else if (strstr(args[1], "modified:") != NULL) {
             target_temp = substr(args[1], 11, strlen(args[1]));
