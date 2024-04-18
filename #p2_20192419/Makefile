@@ -7,7 +7,7 @@ cc = gcc
 all: $(OBJECTS)
 	for i in $(TARGETS); \
 	do\
-		$(cc) -o $$i $$i.o phantomutils.h; \
+		$(cc) -o $$i $$i.o phantomutils.h -lcrypto; \
 	done
 
 ssu_repo.o: ssu_repo.c

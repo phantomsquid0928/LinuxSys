@@ -1,6 +1,8 @@
 
 #include "phantomutils.h"
 
+void restore(char * path, char * path2);
+
 int main(int argc, char * argv[]) {
     if (argc == 1) {
         printf("ERROR <NAME> is not include\n");
@@ -24,7 +26,7 @@ int main(int argc, char * argv[]) {
     
     int loadres;
 
-    if ((loadres = load_commit_log()) < 0) {
+    if ((loadres = load_commit_log()) < 0) { //load versioned files
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
         }
@@ -32,7 +34,7 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
 
-    printf("helo");
+    // printf("helo");
     char targetpath[MAXPATH];
     strcpy(targetpath, repopath);
     
@@ -47,7 +49,7 @@ int main(int argc, char * argv[]) {
     strcat(targetpath, purename);
 
     printf("backup named; %s\n", targetpath);
-    if (access(targetpath, F_OK)) { //not existing commit.
+    if (iscommitexists(purename) == 0) { //not existing commit.
         printf("\"%s\" is not exist in repo\n", purename);
         exit(3);
     }
@@ -73,96 +75,230 @@ int main(int argc, char * argv[]) {
     store2pockets();
 
 
-/////////////////////before is completely same routine with status.c
+    ///////////////before is same as status.c routine. /////////////
 
 
+//  tracked, untracked queue now has only modification of backuped files... need changes queue to loop more clear?
+/**
+ * TODO: check if tracked, untracked has info of modification??
+ *       ************* just load and ignore new files.!!
+*/
+////
+    show_fs_all(version_cursor->root, "");
+
+    char * cwd = getcwd(NULL, 0);
+    int len = strlen(cwd);
 
 
-    // if (tracked.empty(&tracked) == 1) //empty //test
-    // {
-    //     printf("Nothing to commit\n");
-    //     exit(0);
-    // }
+    commitlog * temp = commitrear;
 
-    // char * cwd = getcwd(NULL, 0);
-    // int len = strlen(cwd);
+    int find = 0;
+    while(temp) { //find that version and tries change.
+        filedir * f = temp->flink;
+        filever * v = temp->vlink; 
+        if (!strcmp(v->version, purename)) break;
+        v->status = -3;
+        temp = temp->prev;
+    }
 
-    // mkdir(targetpath, 0777);
-    // printf("%s is under mkdir\n",targetpath);
+    printf("starting...");
 
+    show_fs_all(version_cursor->root, "");
+    //v->status = -3 : newer version than target version 
+    //v->status = 3 : target version.
+    //v->status != 3 or -3 : older version.
 
-    // while(!tracked.empty(&tracked)) {
-    //     filedir * f = tracked.front(&tracked);
-    //     tracked.pop(&tracked);
+    filedir * root = version_cursor->root;
 
-    //     int originfd, commitfd;
-    //     if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
-    //         printf("error while open file\n");
-    //         close(originfd);
-    //         exit(1);
-    //     }
-    //     char curpath[MAXPATH];
-    //     char relpath[MAXPATH];
-    //     sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+    queue q = *initQueue();
 
-    //     // printf("%s\n", relcdpath);
+    q.push(&q, root);
+    int change = 0;
 
+    while(!q.empty(&q)) { //root always ignored. : root is always dir.
+        filedir * f = q.front(&q); 
+        q.pop(&q);
 
-    //     strcpy(curpath, targetpath);
-    //     strcat(curpath, "/");
-    //     strcat(curpath, relpath);
+        for (int i = 0; i <= f->childscnt; i++){ 
+            filedir * child = f->childs[i];
+            filever * nv = child->top;
+            if (child->childscnt != -1) {
+                q.push(&q, child);
+                continue;
+            }
+            if (child->chk == -2) continue;//new file on dir...
+            while(nv->status == -3) {
+                if (nv->next == NULL) break;
+                nv = nv->next;
+            }
+            if (nv->status == -3) continue;
+            if (nv->status == 2) continue;
 
-    //     // printf("%s is under working\n", curpath);
-        
-    //     mkdirs(substr(curpath, 0, return_last_name(curpath)));
-    //     if ((commitfd = open(curpath, O_WRONLY | O_CREAT)) < 0) {
-    //         printf("failed to create commit");
-    //         printf("removing %s\n", targetpath);
-    //         // rmdirs(targetpath);
-    //         close(originfd);
-    //         close(commitfd);
-    //         exit(1);
-    //     }
+            char verpath[MAXPATH];
+            strcpy(verpath, repopath);
+            strcat(verpath, "/");
+            strcat(verpath, nv->version);
+            strcat(verpath, "/");
+            char relpath[MAXPATH];
+            sprintf(relpath, "%s", substr(child->oripath, len + 1, strlen(child->oripath)));
+            strcat(verpath, relpath);
+            // printf("verpath : %s\n", verpath);
 
-    //     /**
-    //      * TODO: mkdirs curpath...
-    //     */
-    //     char buf[4096];
-    //     int len;
-    //     while((len = read(originfd, buf, sizeof(buf))) > 0) {
-    //         write(commitfd, buf, len);
-    //     }
-    //     struct utimbuf temptime;
-    //     struct stat statbuf;
-    //     if (lstat(f->oripath, &statbuf) < 0) {
-    //         printf("failed to do lstat");
-    //         // rmdirs(targetpath);
-    //         close(commitfd);
-    //         close(originfd);
-    //         exit(1);
-    //     }
-    //     temptime.modtime = statbuf.st_mtime;
-    //     temptime.actime = statbuf.st_atime;
-    //     utime(curpath, &temptime);
-        
-    //     close(originfd);
-    //     close(commitfd);
+            struct stat statbuf;
+            if (access(child->oripath, F_OK) && nv->status != 2) { //deleted
+                //restore(verpath, f->oripath);
+                // printf("%s restored deleted file on %s, from %s\n", child->name, child->oripath, verpath);
+                printf("%s restored from deletion\n", child->name);
+                continue;
+            }
+            
+            if (lstat(child->oripath, &statbuf) < 0) { //deleted.
+                fprintf(stderr, "error while reverting files... lstat \n");
+                exit(1);
+            }
 
-    //     /**
-    //      * TODO: save_commit_log queue, flush 형태로 바꾸기?
-    //     */
+            int res = compare_md5(child->oripath, verpath);
 
-    //     if (save_commit_log(purename, f->oripath, f->chk) < 0) {
-    //         printf("failed to write log");
-    //         printf("%s %s %d\n", purename, f->oripath, f->chk);
-    //         //rmdirs(targetpath);
-    //         printf("removing %s\n", targetpath);
-    //         close(commitfd);
-    //         close(originfd);
-    //         exit(1);
-    //     }
-        
-
-    // }
+            if (statbuf.st_size == nv->statbuf.st_size && res == 0) {
+                printf("%s got no change\n", child->name);
+                continue;
+            }
+            else {
+                if (res < 0) {
+                    fprintf(stderr, "error while reverting files... md5\n");
+                    exit(1);
+                }
+                if (res == 0) {
+                    //same
+                    printf("%s got no change\n", child->name);
+                    continue;
+                }
+                //restore(verpath, f->oripath);
+                printf("%s restored from change\n", child->name);// file on %s, from %s\n", child->name, child->oripath, verpath);
+            }
+        }
+    }
 
 }
+
+void restore(char * path, char * path2) {
+    
+}
+    //bottom code is okay but cannot check curver easily...
+
+    
+    //revert changes that can chase
+
+
+
+
+//     char * cwd = getcwd(NULL, 0);
+//     int len = strlen(cwd);
+
+//     int ischanged = 0;
+//     while(!tracked.empty(&tracked)) {
+//         filedir * f = tracked.front(&tracked);
+//         filever * v = f->top;
+//         tracked.pop(&tracked);
+//         //mkdirs, restore.
+//         if (f->chk == -2) continue;//new
+
+//         char verpath[MAXPATH];
+//         strcpy(verpath, repopath);
+//         strcat(verpath, "/");
+//         strcat(verpath, v->version);
+//         strcat(verpath, "/");
+//         char relpath[MAXPATH];
+//         sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+//         strcat(verpath, relpath);
+//         printf("verpath : %s\n", verpath);
+//         int verstatus = v->status;
+
+//         if (f->chk == 2 || f->chk == 1) { //del or mod, then revert to latest.
+//             //restore(verpath, f->oripath); -> restore need mkdirs.
+//             printf("restore tracked commited change on %s to ver : %s, verpath : %s\n", f->name, v->version, verpath);
+//             ischanged = 1;
+//         } 
+//     }
+//     while(!untracked.empty(&untracked)) {
+//         filedir * f = untracked.front(&untracked);
+//         untracked.pop(&untracked); 
+//         filever * v = f->top;
+//         //mkdirs, restore.
+//         if (f->chk == -2) continue;//new
+
+//         char verpath[MAXPATH];
+//         strcpy(verpath, repopath);
+//         strcat(verpath, "/");
+//         strcat(verpath, v->version);
+//         strcat(verpath, "/");
+//         char relpath[MAXPATH];
+//         sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+//         strcat(verpath, relpath);
+//         printf("verpath : %s\n", verpath);
+//         int verstatus = v->status;
+
+//         if (f->chk == 2 || f->chk == 1) { //del or mod, then revert to latest.
+//             printf("restore untracked but commited change on %s to ver : %s, verpath : %s\n", f->name, v->version, verpath);
+//             //restore(verpath, f->oripath);
+//             ischanged = 1;
+//         } 
+//     }
+
+//     commitlog * temp = commitrear; //it will have some redundancy(latest one) but i dun care
+
+//     queue deleted = *initQueue();
+
+//     while(temp) { //temp = second commit -> user: trying to go bak to first.
+//         if (!strcmp(temp->vlink->version, purename)) break;
+
+//         filedir * f = temp->flink;
+//         filever * cv = temp->vlink;
+//         filever * v = temp->vlink->next;
+//         int verstatus = cv->status;
+
+//         if (verstatus == -2) { //new file on that commit, v is NULL
+//             printf("removing new file on that ver\n");
+//             //removing
+//             temp = temp->prev;
+//             continue;
+//         }
+
+//         //for delete recover
+
+//         char verpath[MAXPATH];
+//         strcpy(verpath, repopath);
+//         strcat(verpath, "/");
+//         strcat(verpath, v->version);
+//         strcat(verpath, "/");
+//         char relpath[MAXPATH];
+//         sprintf(relpath, "%s", substr(f->oripath, len + 1, strlen(f->oripath)));
+//         strcat(verpath, relpath);
+//         printf("previous verpath : %s\n", verpath);
+       
+
+//         if (verstatus == 1 || verstatus == 2) { //del or mod, then revert to latest.
+//             //if diff curdir's file , verpath
+//             //then restore
+//             //if it is 
+//             //
+//             //restore(verpath, f->oripath); -> restore need mkdirs.
+            
+//             printf("restore saved change on %s to ver : %s, verpath : %s\n", f->name, cv->version, verpath);
+//             ischanged = 1;
+//         }
+//         // x
+        
+//         //mkdirs, restore.
+//         temp = temp->prev; //going reverse of commit
+        
+//     }
+//     //complete.
+//     if (ischanged == 0) {
+//         printf("no chanage");
+//     }
+//     else {
+//         printf("ccc");
+//     }   
+
+// }

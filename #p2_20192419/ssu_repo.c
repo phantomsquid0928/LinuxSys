@@ -147,7 +147,35 @@ void commit_exec(int argc, char ** argv) {
     }
 }
 void revert_exec(int argc, char ** argv) {
-    printf("hello revert");
+    // printf("hello revert");
+    char path[MAXPATH] = "";
+    memset(path, 0, sizeof(path));
+    if (argc != 1) {
+        strcpy(path, argv[1]);
+    }
+    if (argc > 2) {
+        for (int i = 2; i < argc; i++) {
+            strcat(path, " ");
+            strcat(path, argv[i]);
+        }
+    }
+
+    int pid = fork();
+    if (pid == 0) {
+        char * exec_args1[] = {revertpath, NULL};
+        char * exec_args2[] = {revertpath, path, NULL};
+        if (argc == 1) {
+            execv(revertpath, exec_args1);
+        }
+        else {
+            execv(revertpath, exec_args2);
+        }
+    }
+    else {
+        int code;
+        int pid = wait(&code);
+       //error
+    }
 }
 void log_exec(int argc, char ** argv) { 
     // printf("hello log");

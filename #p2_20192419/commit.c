@@ -49,7 +49,7 @@ int main(int argc, char * argv[]) {
     strcat(targetpath, purename);
 
     printf("backup named; %s\n", targetpath);
-    if (access(targetpath, F_OK) == 0) {
+    if (iscommitexists(purename) == 1) {
         printf("%s is already exist in repo\n", purename);
         exit(3);
     }
@@ -116,10 +116,10 @@ int main(int argc, char * argv[]) {
             mkdirs(substr(curpath, 0, return_last_name(curpath)));
 
             
-            if ((commitfd = open(curpath, O_WRONLY | O_CREAT)) < 0) {
+            if ((commitfd = open(curpath, O_WRONLY | O_CREAT, 0777)) < 0) {
                 printf("failed to create commit");
                 printf("removing %s\n", targetpath);
-                // rmdirs(targetpath);
+                rmdirs(targetpath);
                 close(originfd);
                 close(commitfd);
                 exit(1);
@@ -128,7 +128,7 @@ int main(int argc, char * argv[]) {
             if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
                 printf("error while open file\n");
                 printf("removing %s\n", targetpath);
-                
+                rmdirs(targetpath);
                 close(originfd);
                 exit(1);
             }
@@ -145,7 +145,7 @@ int main(int argc, char * argv[]) {
             struct stat statbuf;
             if (lstat(f->oripath, &statbuf) < 0) {
                 printf("failed to do lstat");
-                // rmdirs(targetpath);
+                rmdirs(targetpath);
                 close(commitfd);
                 close(originfd);
                 exit(1);
@@ -165,7 +165,7 @@ int main(int argc, char * argv[]) {
         if (save_commit_log(purename, f->oripath, f->chk) < 0) {
             printf("failed to write log");
             printf("%s %s %d\n", purename, f->oripath, f->chk);
-            //rmdirs(targetpath);
+            rmdirs(targetpath);
             printf("removing %s\n", targetpath);
             close(commitfd);
             close(originfd);

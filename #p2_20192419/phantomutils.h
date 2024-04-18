@@ -116,6 +116,55 @@ char * purifypath(char * path) {
     return newpath;
 }
 
+
+int md5(char *target_path, char *hash_result)
+{
+	FILE *fp;
+	unsigned char hash[MD5_DIGEST_LENGTH];
+	unsigned char buffer[16384];
+	int bytes = 0;
+	MD5_CTX md5;
+
+	if ((fp = fopen(target_path, "rb")) == NULL){
+		printf("ERROR: fopen error for %s\n", target_path);
+		return 1;
+	}
+
+	MD5_Init(&md5);
+
+	while ((bytes = fread(buffer, 1, 16383, fp)) != 0)
+		MD5_Update(&md5, buffer, bytes);
+	
+	MD5_Final(hash, &md5);
+
+	for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
+		sprintf(hash_result + (i * 2), "%02x", hash[i]);
+	hash_result[32] = 0;
+
+	fclose(fp);
+
+	return 0;
+}
+
+/// @brief 
+/// @param path 
+/// @param path2 
+/// @return same : 0 diff : 1 err : -1
+int compare_md5(char * path, char * path2) {
+	char hash[33];
+	char hash2[33];
+	if (md5(path, hash)) {
+		return -1;
+	}
+	if (md5(path2, hash2)) {
+		return -1;
+	}
+	if (!strcmp(hash, hash2)) {
+		return 0;
+	}
+	return 1;
+}
+
 typedef struct node {
 	struct node * next;
 	void * data;
@@ -203,7 +252,7 @@ queue * initQueue() {
 }
 
 
-
+/// @brief deque : like stack conversion... on ver-deque-test branch. stack but can go for/back. next : to older, prev : to latest one.
 typedef struct filever {
     char version[MAXDIR];
     int status;     //-2 added -1: existing    1 mod 2 removed   indicates action on that version of commit.
@@ -217,7 +266,7 @@ typedef struct filedir {
     char path[MAXPATH];// version path
     char oripath[MAXPATH]; //original path
     filever * top; //latest
-    int chk;       //indicates whether it is target of commit: compared to top: chk = -1 : existing, no change   chk = 0 new    chk= 1 modify   chk= 2 remove
+    int chk;       //indicates current status compared to latest ver. compared to top: chk = -1 : existing, no change   chk = 0 / -2 new    chk= 1 modify   chk= 2 remove
     int istrack;   //chk whether this file is being tracked 0 : no 1 : yes
     filever * target; //use when make revert?
 
@@ -229,6 +278,7 @@ typedef struct commitlog {
     filedir * flink;
     filever * vlink;
     struct commitlog * next;
+    struct commitlog * prev;
 }commitlog;
 
 typedef struct version_controller { //revert 3 ->  revert files to version that ver < 3 
@@ -491,7 +541,23 @@ void addcommitlog(commitlog * t) {
         return;
     }
     commitrear->next = t;
+    t->prev = commitrear;
+
     commitrear = t;
+}
+
+/// @brief check if commit exists
+/// @param version 
+/// @return 1 exists 0 none
+int iscommitexists(char * version) {
+    commitlog * t = commithead;
+    while(t) {
+        if (!strcmp(t->vlink->version, version)) {
+            return 1;
+        }
+        t = t->next;
+    }
+    return 0;
 }
 
 filedir * newfile() {
@@ -512,21 +578,29 @@ filever * newversion() {
 commitlog * newcommitlog() { //only directs file
     commitlog * temp = (commitlog*)malloc(sizeof(commitlog));
     temp->next = NULL;
+    temp->prev = NULL;
     return temp;
 }
 
 // 
 
-
+///
+/// @param f filedir
+/// @param t version
+/// @return useless.
 int addversion(filedir * f, filever * t) {
     if (f->top == NULL) {
         f->top = t;
         return 0;
     }
     t->next = f->top;
+    // f->top->prev = t;
     f->top = t;
     return 0;
 }
+
+
+
 
 /**
  * TODO: add stamppath on dir
@@ -543,7 +617,7 @@ filedir * addfiledir(filedir * target) { //always comes file
     // printf("%s\n", relpath);
     int res;
     char ** args = split(relpath, "/", &res);
-    if (!strcmp(target->oripath, temp->oripath)) { // root is ontrack
+    if (!strcmp(target->oripath, temp->oripath)) { // root is ontrack ????
         temp->istrack = 1;
         free(target);
         return temp;
@@ -582,8 +656,9 @@ filedir * addfiledir(filedir * target) { //always comes file
             if (chk == 1) { 
                 int mid = start + end >> 1;
                 //same, dir or file exists
-                // printf("exists!\n");
+                printf("exists!\n");
                 if (i == res - 1) { //file
+                    printf("same file!");
                     addversion(temp->childs[mid], target->top);
                     free(target);
                     return temp->childs[mid];
@@ -729,6 +804,50 @@ void show_fs(filedir * cur, char * padding) {
         else {
             printf("%s/", curpad);
             show_fs(cur->childs[i], nextpad);
+        }
+        
+    }
+}
+
+void show_fs_all(filedir * cur, char * padding) {
+    // if (cur->childscnt == -1) { //file
+    //     printf(" file");
+    //     printf(" latest : %s\n", cur->top->version);
+    //     return;
+    // }
+    printf("%s", cur->name);
+    printf("  dir %p\n", cur);
+    for (int i = 0;i < cur->childscnt + 1; i++) {
+        char curpad[1000];
+        char nextpad[1000];
+        if (i == cur->childscnt) {
+            sprintf(curpad, "%s   └─", padding);
+            sprintf(nextpad, "%s    ", padding);
+        }
+        else {
+            sprintf(curpad, "%s   ├─", padding);
+            sprintf(nextpad, "%s   │ ", padding);
+        }
+        
+        if (cur->childs[i]->childscnt == -1) { //file
+            printf("%s%s", curpad, cur->childs[i]->name);
+            // printf(" file");
+            // printf(" latest : %s %p    chk ;%d status: %d istracking : %d\n", cur->childs[i]->top->version
+            // , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->top->status, cur->childs[i]->istrack);
+            // printf("%s\n", nextpad);
+            // printf("%s versions... : \n", nextpad);
+            filever *v = cur->childs[i]->top;
+            while(v) {
+                printf("%s  %s : %d\n", nextpad, v->version, v->status);
+                v = v->next;
+            }
+            printf("%s\n", nextpad);
+
+            continue;
+        }
+        else {
+            printf("%s/", curpad);
+            show_fs_all(cur->childs[i], nextpad);
         }
         
     }
@@ -1264,14 +1383,17 @@ int show_commit_log(char * version) {
         // printf("%s %s", version, curver);
         if (version == NULL || !strcmp(version, curver)) {
             chk = 1;
-            printf("commit: %s\n", temp->vlink->version);
+            printf("commit: \"%s\"\n", temp->vlink->version);
             while(1) {
                 if (temp == NULL || strcmp(curver, temp->vlink->version) != 0) break;
                 strcpy(curver, temp->vlink->version);
                 char tempstr[1000];
-                if (temp->vlink->status == 0) strcpy(tempstr, "new file");
-                if (temp->vlink->status == 1) strcpy(tempstr, "modified");
-                if (temp->vlink->status == 2) strcpy(tempstr, "removed");
+                if (temp->vlink->status == -2) strcpy(tempstr, "new file");
+                else if (temp->vlink->status == 1) strcpy(tempstr, "modified");
+                else if (temp->vlink->status == 2) strcpy(tempstr, "removed");
+                else {
+                    printf("????");
+                }
                 printf("-  %s: %s\n", tempstr, temp->flink->oripath);
                 // printf("   log : %s\n", temp->flink->oripath);
                 // printf("   p : %p\n", temp->flink);
