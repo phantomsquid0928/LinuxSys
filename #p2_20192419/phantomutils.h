@@ -656,9 +656,9 @@ filedir * addfiledir(filedir * target) { //always comes file
             if (chk == 1) { 
                 int mid = start + end >> 1;
                 //same, dir or file exists
-                printf("exists!\n");
+                // printf("exists!\n");
                 if (i == res - 1) { //file
-                    printf("same file!");
+                    // printf("same file!");
                     addversion(temp->childs[mid], target->top);
                     free(target);
                     return temp->childs[mid];
@@ -1023,6 +1023,26 @@ int makeUnionofMockReal() {
                     j++;
                     continue;
                 }
+                
+                // int res = compare_md5(child->oripath, verpath);
+
+                // if (statbuf.st_size == f->childs[i]->top->statbuf.st_size && res == 0) {
+                //     printf("%s got no change\n", child->name);
+                //     continue;
+                // }
+                // else {
+                //     if (res < 0) {
+                //         fprintf(stderr, "error while reverting files... md5\n");
+                //         exit(1);
+                //     }
+                //     if (res == 0) {
+                //         //same
+                //         printf("%s got no change\n", child->name);
+                //         continue;
+                //     }
+                // }
+
+
                 if (statbuf.st_mtime != f->childs[i]->top->statbuf.st_mtime) {//modified
                     f->childs[i]->chk = 1; //mod
                     filever * v = newversion();

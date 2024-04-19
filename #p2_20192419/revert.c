@@ -131,12 +131,11 @@ int main(int argc, char * argv[]) {
                 if (nv->next == NULL) break;
                 nv = nv->next;
             }
-            if (nv->status == -3) {
+            if (nv->status == -3 || nv->status == 2) {
                 printf("%s not exists in that ver\n", child->name);
                 continue;
             }
-            if (nv->status == 2) continue;
-
+            
             char verpath[MAXPATH];
             strcpy(verpath, repopath);
             strcat(verpath, "/");
@@ -204,6 +203,20 @@ void restore(char * path, char * path2) {
     while((len = read(commitfd, buf, sizeof(buf))) > 0) {
         write(originfd, buf, len);
     }
+
+    struct utimbuf temptime;
+    struct stat statbuf;
+
+    if (lstat(path, &statbuf) < 0) {
+        printf("failed to do lstat");
+        exit(1);
+    }
+    temptime.modtime = statbuf.st_mtime;
+    temptime.actime = statbuf.st_atime;
+    utime(path2, &temptime);
+
+    close(originfd);
+    close(commitfd);
 }
     //bottom code is okay but cannot check curver easily...
 
