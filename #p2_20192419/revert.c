@@ -58,21 +58,21 @@ int main(int argc, char * argv[]) {
      * TODO: change this after status all fixeds
     */
     // stagedtofs();
-    int err = 0;
-    if ((err = makeUnionofMockReal()) < 0) {
-        printf("error %d", err);
-        exit(100);
-    }
+    // int err = 0;
+    // if ((err = makeUnionofMockReal()) < 0) {
+    //     printf("error %d", err);
+    //     exit(100);
+    // }
 
-    if ((loadres = load_staging_log()) < 0) {
-        if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
-        }
-        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
-        exit(3);
-    }
+    // if ((loadres = load_staging_log()) < 0) {
+    //     if (loadres == -1) {
+    //         printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+    //     }
+    //     printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+    //     exit(3);
+    // }
 
-    store2pockets();
+    // store2pockets();
 
 
     ///////////////before is same as status.c routine. /////////////
@@ -126,12 +126,15 @@ int main(int argc, char * argv[]) {
                 q.push(&q, child);
                 continue;
             }
-            if (child->chk == -2) continue;//new file on dir...
+            // if (child->chk == -2) continue;//new file on dir...
             while(nv->status == -3) {
                 if (nv->next == NULL) break;
                 nv = nv->next;
             }
-            if (nv->status == -3) continue;
+            if (nv->status == -3) {
+                printf("%s not exists in that ver\n", child->name);
+                continue;
+            }
             if (nv->status == 2) continue;
 
             char verpath[MAXPATH];
@@ -146,7 +149,7 @@ int main(int argc, char * argv[]) {
 
             struct stat statbuf;
             if (access(child->oripath, F_OK) && nv->status != 2) { //deleted
-                //restore(verpath, f->oripath);
+                restore(verpath, child->oripath);
                 // printf("%s restored deleted file on %s, from %s\n", child->name, child->oripath, verpath);
                 printf("%s restored from deletion\n", child->name);
                 continue;
@@ -173,7 +176,7 @@ int main(int argc, char * argv[]) {
                     printf("%s got no change\n", child->name);
                     continue;
                 }
-                //restore(verpath, f->oripath);
+                restore(verpath, child->oripath);
                 printf("%s restored from change\n", child->name);// file on %s, from %s\n", child->name, child->oripath, verpath);
             }
         }
@@ -182,7 +185,25 @@ int main(int argc, char * argv[]) {
 }
 
 void restore(char * path, char * path2) {
-    
+    int originfd, commitfd;
+    if ((originfd = open(path2, O_WRONLY | O_CREAT | O_TRUNC, 0777)) < 0) {
+        printf("failed to revert\n");
+        printf("path : %s", path2);
+        exit(1);
+    }
+
+    if ((commitfd = open(path, O_RDONLY)) < 0) {
+        printf("error while open file\n");
+        printf("commit : %s\n", path);
+        exit(1);
+    }
+
+    char buf[1024];
+    int len;
+
+    while((len = read(commitfd, buf, sizeof(buf))) > 0) {
+        write(originfd, buf, len);
+    }
 }
     //bottom code is okay but cannot check curver easily...
 
