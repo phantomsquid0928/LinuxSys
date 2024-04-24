@@ -236,15 +236,25 @@ int main(int argc, char * argv[]) {
         getc(stdin); //remove useless \n
 
         int argc = 0;
+        int chk = 0;
         char ** argv = split(input, " ", &argc);
         if (argc == 0) continue;
         for (int i = 0; i < commandscnt; i++) {
             if (!strcmp(commandsList[i], argv[0])) {
+                chk = 1;
                 exec_link[i](argc, argv);
-            }   
+            }
         }
         for (int i = 0; i < argc; i++) {
             free(argv[i]);
         }
+        if (chk == 0) {
+            printf("Usage: \n");
+            for (int i = 0; i < commandscnt; i++) {
+                printf("  >");
+                helpfuncs[i]();
+            }
+        }
+
     }
 }

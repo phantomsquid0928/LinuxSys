@@ -54,9 +54,6 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
     
-    /**
-     * TODO: change this after status all fixeds
-    */
     // stagedtofs();
     int err = 0;
     if ((err = makeUnionofMockReal()) < 0) {
@@ -133,9 +130,6 @@ int main(int argc, char * argv[]) {
                 exit(1);
             }
 
-            /**
-             * TODO: mkdirs curpath...
-            */
             char buf[4096];
             int len;
             while((len = read(originfd, buf, sizeof(buf))) > 0) {
