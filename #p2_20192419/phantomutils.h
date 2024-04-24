@@ -21,6 +21,7 @@
 char commitlogpath[MAXPATH];
 char staginglogpath[MAXPATH];
 char repopath[MAXPATH];
+char * cwdpath;
 
 const int commandscnt = 8;
 
@@ -435,7 +436,7 @@ int addlogrecurs(char * target) {
     int cnt;
     queue q = *initQueue();
 
-    char * cwd = getcwd(NULL, 0);
+    // char * cwd = getcwd(NULL, 0);
 
     q.push(&q, target);
     while(!q.empty(&q)) {
@@ -480,7 +481,7 @@ int dellogrecurs(char * target) {
     int cnt;
     queue q = *initQueue();
 
-    char * cwd = getcwd(NULL, 0);
+    // char * cwd = getcwd(NULL, 0);
 
     q.push(&q, target);
 
@@ -907,7 +908,7 @@ int makeUnionofMockReal() {
                 j++;
                 continue;
             }
-            if (j < cnt && !strcmp(namelist[j]->d_name, ".repo") && !strcmp(f->oripath, getcwd(NULL, 0))) {
+            if (j < cnt && !strcmp(namelist[j]->d_name, ".repo") && !strcmp(f->oripath, cwdpath)) {
                 j++;
                 continue;
             }
@@ -1043,7 +1044,7 @@ int makeUnionofMockReal() {
                 // }
 
 
-                if (statbuf.st_mtime != f->childs[i]->top->statbuf.st_mtime) {//modified
+                if (statbuf.st_size != f->childs[i]->top->statbuf.st_size) {//modified
                     f->childs[i]->chk = 1; //mod
                     filever * v = newversion();
                     v->statbuf = statbuf;
@@ -1054,14 +1055,43 @@ int makeUnionofMockReal() {
                     continue;
                 }
                 else {
-                    /**
-                     * TODO: md5 here
-                    */
-                    f->childs[i]->chk = -1; 
-                    // tracked.push(&tracked, f->childs[i]); //tracked newfile
-                    i++;
-                    j++;
-                    continue;
+
+                    // printf("hle");
+                    char verpath[MAXPATH];
+                    strcpy(verpath, repopath);
+                    strcat(verpath, "/");
+                    strcat(verpath, f->childs[i]->top->version);
+                    strcat(verpath, "/");
+
+                    char relpath[MAXPATH];
+                    sprintf(relpath, "%s", substr(f->childs[i]->oripath, strlen(cwdpath) + 1, strlen(f->childs[i]->oripath)));
+                    strcat(verpath, relpath);
+
+                    int res = compare_md5(f->childs[i]->oripath, verpath);
+
+                    if (res < 0) {
+                        fprintf(stderr, "error while comparing files... md5\n");
+                        exit(1);
+                    }
+                    if (res == 0) {
+                        //same
+                        f->childs[i]->chk = -1; 
+                        // tracked.push(&tracked, f->childs[i]); //tracked newfile
+                        i++;
+                        j++;
+                        continue;
+                        // printf("%s got no change\n", child->name);
+                    }
+                    else {
+                        f->childs[i]->chk = 1; //mod
+                        filever * v = newversion();
+                        v->statbuf = statbuf;
+                        v->status = 1;
+                        addversion(f->childs[i], v);
+                        i++;
+                        j++;
+                        continue;
+                    }
                 }
             }
             if (res < 0) { //removed staged / unstaged
@@ -1243,7 +1273,7 @@ int rmdirs(char * path) { //danger?
 /// @brief NOW U HAVE TO CALL THIS AFTER make()  231 routine
 /// @return success 0 else minus values
 int load_staging_log() {
-    char * cwd = getcwd(NULL, 0);
+    // char * cwd = getcwd(NULL, 0);
     // printf("%s", stagelogpath);
     if (access(staginglogpath, F_OK)) return -1;
     char buf[MAXPATH * 2];
@@ -1275,7 +1305,7 @@ int load_staging_log() {
 int load_commit_log() {
     struct stat statbuf;
 
-    char * cwd = getcwd(NULL, 0);
+    // char * cwd = getcwd(NULL, 0);
 
     // printf("%s", stagelogpath);
     if (access(commitlogpath, F_OK)) return -1;
@@ -1320,10 +1350,10 @@ int load_commit_log() {
         char target_path[MAXPATH];
         strcpy(target_path, target_temp);
         
-        char * relpath = substr(target_path, strlen(cwd) + 1, strlen(target_path));
+        char * relpath = substr(target_path, strlen(cwdpath) + 1, strlen(target_path));
         char version_path[MAXPATH];
         char name[MAXDIR];
-        sprintf(version_path, "%s/.repo/%s/%s", cwd, commit_name, relpath);
+        sprintf(version_path, "%s/.repo/%s/%s", cwdpath, commit_name, relpath);
         sprintf(name, "%s", substr(target_path, return_last_name(target_path) + 1, strlen(target_path)));
         
         
@@ -1357,7 +1387,7 @@ int load_commit_log() {
 /// @param mod 
 /// @return 
 int save_staging_log(char * abpath, int mod) {
-    char * cwd = getcwd(NULL, 0);
+    // char * cwd = getcwd(NULL, 0);
     // char stagelogpath[MAXPATH];
 
     // sprintf(stagelogpath, "%s/.repo/.staging.log", cwd);
@@ -1463,6 +1493,7 @@ void init() {
     sprintf(commitlogpath, "%s/.repo/.commit.log", cwd);
     sprintf(staginglogpath, "%s/.repo/.staging.log", cwd);
     sprintf(repopath, "%s/.repo", cwd);
+    cwdpath = cwd;
     return;
 }
 
