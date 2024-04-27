@@ -132,9 +132,9 @@ int main(int argc, char * argv[]) {
 
             char buf[4096];
             int len;
-            // while((len = read(originfd, buf, sizeof(buf))) > 0) {
-            //     write(commitfd, buf, len);
-            // }
+            while((len = read(originfd, buf, sizeof(buf))) > 0) {
+                write(commitfd, buf, len);
+            }
             struct utimbuf temptime;
             struct stat statbuf;
             if (lstat(f->oripath, &statbuf) < 0) {
@@ -154,17 +154,18 @@ int main(int argc, char * argv[]) {
 
         /**
          * TODO: save_commit_log queue, flush 형태로 바꾸기?
+         * i dunt know wal :P
         */
 
-        // if (save_commit_log(purename, f->oripath, f->chk) < 0) {
-        //     printf("failed to write log");
-        //     printf("%s %s %d\n", purename, f->oripath, f->chk);
-        //     rmdirs(targetpath);
-        //     printf("removing %s\n", targetpath);
-        //     close(commitfd);
-        //     close(originfd);
-        //     exit(1);
-        // }
+        if (save_commit_log(purename, f->oripath, f->chk) < 0) {
+            printf("failed to write log");
+            printf("%s %s %d\n", purename, f->oripath, f->chk);
+            rmdirs(targetpath);
+            printf("removing %s\n", targetpath);
+            close(commitfd);
+            close(originfd);
+            exit(1);
+        }
 
 
         char type[MAXDIR];
