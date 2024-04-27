@@ -1173,6 +1173,8 @@ int makeUnionofMockReal() {
 char ** file1s;
 char ** file2s;
 int dp[10000][10000];
+char buf[1000000];
+char buf2[1000000];
 
 /**
  * TODO: danger on fclose
@@ -1203,15 +1205,12 @@ void calcchange(filedir * f, filever * v) {
 
     if (f->chk == -2) { //new
         int cnt = 0;
-        char buf[10000];
-        while(1) {
-            memset(buf, 0, sizeof(buf));
-            fscanf(fp, "%[^\n^\r]", buf);
-            getc(fp);
-            if (feof(fp)) break;
+        while(fgets(buf, 1000000, fp) != NULL) {
+            sscanf(buf, "%[^\n^\r]", buf);
+            // if (feof(fp)) break;
             cnt++;
         }
-        printf("%d", cnt);
+        // printf("%d", cnt);
         plus += cnt;
 
         fclose(fp);
@@ -1219,15 +1218,12 @@ void calcchange(filedir * f, filever * v) {
     }
     if (f->chk == 2) { //del
         int cnt = 0;
-        char buf[10000];
-        while(1) {
-            memset(buf, 0, sizeof(buf));
-            fscanf(fp2, "%[^\n^\r]", buf);
-            getc(fp2);
-            if (feof(fp2)) break;
+        while(fgets(buf, 1000000, fp2) != NULL) {
+            sscanf(buf, "%[^\n^\r]", buf);
+            // if (feof(fp2)) break;
             cnt++;
         }
-        printf("%d", cnt);
+        // printf("%d", cnt);
         minus += cnt;
 
         fclose(fp2);
@@ -1239,10 +1235,8 @@ void calcchange(filedir * f, filever * v) {
 
         file1s = (char**)malloc(sizeof(char*));
         file2s = (char**)malloc(sizeof(char*));
-        char buf[10000];
-        char buf2[10000];
-
-        while(fgets(buf, 10000, fp) != NULL) {
+    
+        while(fgets(buf, 1000000, fp) != NULL) {
             sscanf(buf, "%[^\n^\r]", buf);
             // printf("input : %s\n", buf);
             file1s = (char**)realloc(file1s, sizeof(char*) * (cnt + 3));
@@ -1254,7 +1248,7 @@ void calcchange(filedir * f, filever * v) {
             memset(buf, 0, sizeof(buf));
             // if (feof(fp)) break;
         }
-        while(fgets(buf, 10000, fp2) != NULL) {
+        while(fgets(buf, 1000000, fp2) != NULL) {
             sscanf(buf, "%[^\n^\r]", buf);
             // printf("2input : %s\n", buf);
             file2s = (char**)realloc(file2s, sizeof(char*) * (cnt2 + 3));
