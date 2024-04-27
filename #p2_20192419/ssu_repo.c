@@ -208,7 +208,32 @@ void log_exec(int argc, char ** argv) {
     }
 }
 void help_exec(int argc, char ** argv){
-    printf("");
+    char path[MAXPATH] = "";
+    if (argc != 1) {
+        strcpy(path, argv[1]);
+    }
+    if (argc > 2) {
+        for (int i = 2; i < argc; i++) {
+            strcat(path, " ");
+            strcat(path, argv[i]);
+        }
+    }
+    int pid = fork();
+    if (pid == 0) {
+        char * exec_args1[] = {helppath, NULL};
+        char * exec_args2[] = {helppath, path, NULL};
+        if (argc == 1) {
+            execv(helppath, exec_args1);
+        }
+        else {
+            execv(helppath, exec_args2);
+        }
+    }
+    else {
+        int code;
+        int pid = wait(&code);
+        //error
+    }
 }
 void exit_exec(int argc, char ** argv) {
     exit(0);

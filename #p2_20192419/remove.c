@@ -38,7 +38,7 @@ int main(int argc, char * argv[]) {
     int loadres = 0;
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
         }
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
