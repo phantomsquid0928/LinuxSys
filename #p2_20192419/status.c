@@ -36,7 +36,7 @@ int main(int argc, char * argv[]) {
         exit(1);
     }
     // show_staging_log();/
-    show_fs(version_cursor->root, "");
+    // show_fs(version_cursor->root, "");
 
     //now load log (log now traverse mockfs that contains all files that changed)
     //i can make this func also can manage istrack...?
@@ -48,7 +48,7 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
 
-    show_fs(version_cursor->root, "");
+    // show_fs(version_cursor->root, "");
 
     store2pockets(0);
     // // printf("HELLO");
@@ -58,7 +58,7 @@ int main(int argc, char * argv[]) {
         exit(0);
     }
     if (!tracked.empty(&tracked)) {
-        printf("\nChanges to be commited:\n");
+        printf("Changes to be commited:\n");
     }
     while(!tracked.empty(&tracked)) {
         filedir * temp = tracked.front(&tracked);

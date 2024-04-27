@@ -62,7 +62,7 @@ int main(int argc, char * argv[]) {
  *       ************* just load and ignore new files.
 */
 ////
-    show_fs_all(version_cursor->root, "");
+    // show_fs_all(version_cursor->root, "");
 
     char * cwd = getcwd(NULL, 0);
     int len = strlen(cwd);
@@ -81,7 +81,7 @@ int main(int argc, char * argv[]) {
 
     // printf("starting...");
 
-    show_fs_all(version_cursor->root, "");
+    // show_fs_all(version_cursor->root, "");
     //v->status = -3 : newer version than target version 
     //v->status = 3 : target version.
     //v->status != 3 or -3 : older version.
