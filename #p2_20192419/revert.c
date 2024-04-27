@@ -30,7 +30,7 @@ int main(int argc, char * argv[]) {
 
     if ((loadres = load_commit_log()) < 0) { //load versioned files
         if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
         }
         printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
@@ -56,34 +56,10 @@ int main(int argc, char * argv[]) {
         exit(3);
     }
     
-    /**
-     * TODO: change this after status all fixeds
-    */
-    // stagedtofs();
-    // int err = 0;
-    // if ((err = makeUnionofMockReal()) < 0) {
-    //     printf("error %d", err);
-    //     exit(100);
-    // }
 
-    // if ((loadres = load_staging_log()) < 0) {
-    //     if (loadres == -1) {
-    //         printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
-    //     }
-    //     printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
-    //     exit(3);
-    // }
-
-    // store2pockets();
-
-
-    ///////////////before is same as status.c routine. /////////////
-
-
-//  tracked, untracked queue now has only modification of backuped files... need changes queue to loop more clear?
 /**
  *
- *       ************* just load and ignore new files.!!
+ *       ************* just load and ignore new files.
 */
 ////
     show_fs_all(version_cursor->root, "");

@@ -1168,10 +1168,193 @@ int makeUnionofMockReal() {
     // free(&q);
     return 1;
 }
+
+
+char ** file1s;
+char ** file2s;
+int dp[10000][10000];
+
+/**
+ * TODO: danger on fclose
+*/
+/// @brief mod/ del/ new files comes, del and new doesn't calc editdist, just add lines to plus or minus
+/// @param f 
+void calcchange(filedir * f, filever * v) {
+    char * path = f->oripath;
+    char temp[4096];
+    sprintf(temp, "%s", path);
+    
+    FILE * fp = fopen(temp, "r");
+
+    char verpath[MAXPATH];
+    strcpy(verpath, repopath);
+    strcat(verpath, "/");
+    strcat(verpath, v->version);
+    strcat(verpath, "/");
+
+    char relpath[MAXPATH];
+    sprintf(relpath, "%s", substr(f->oripath, strlen(cwdpath) + 1, strlen(f->oripath)));
+    strcat(verpath, relpath);
+
+    // printf("verpath : %s\n", verpath);
+
+    FILE * fp2 = fopen(verpath, "r");
+
+
+    if (f->chk == -2) { //new
+        int cnt = 0;
+        char buf[10000];
+        while(1) {
+            memset(buf, 0, sizeof(buf));
+            fscanf(fp, "%[^\n^\r]", buf);
+            getc(fp);
+            if (feof(fp)) break;
+            cnt++;
+        }
+        printf("%d", cnt);
+        plus += cnt;
+
+        fclose(fp);
+        return;
+    }
+    if (f->chk == 2) { //del
+        int cnt = 0;
+        char buf[10000];
+        while(1) {
+            memset(buf, 0, sizeof(buf));
+            fscanf(fp2, "%[^\n^\r]", buf);
+            getc(fp2);
+            if (feof(fp2)) break;
+            cnt++;
+        }
+        printf("%d", cnt);
+        minus += cnt;
+
+        fclose(fp2);
+        return;
+    }
+    if (f->chk == 1) {
+        int cnt = 0;
+        int cnt2 = 0;
+
+        file1s = (char**)malloc(sizeof(char*));
+        file2s = (char**)malloc(sizeof(char*));
+        char buf[10000];
+        char buf2[10000];
+
+        while(fgets(buf, 10000, fp) != NULL) {
+            sscanf(buf, "%[^\n^\r]", buf);
+            // printf("input : %s\n", buf);
+            file1s = (char**)realloc(file1s, sizeof(char*) * (cnt + 3));
+            char * temp = malloc(sizeof(char) * (strlen(buf) + 1));
+            strcpy(temp, buf);
+            file1s[cnt + 1] = temp;
+
+            cnt++;
+            memset(buf, 0, sizeof(buf));
+            // if (feof(fp)) break;
+        }
+        while(fgets(buf, 10000, fp2) != NULL) {
+            sscanf(buf, "%[^\n^\r]", buf);
+            // printf("2input : %s\n", buf);
+            file2s = (char**)realloc(file2s, sizeof(char*) * (cnt2 + 3));
+            char * temp = malloc(sizeof(char) * (strlen(buf) + 1));
+            strcpy(temp, buf);
+            file2s[cnt2 + 1] = temp;
+            cnt2++;
+            memset(buf, 0, sizeof(buf));
+            // if (feof(fp2)) break;
+        }
+        file1s[0] = " ";
+        file2s[0] = " ";
+
+        memset(dp, 0, sizeof(dp));
+        for (int i = 0; i<= cnt; i++) {
+            dp[i][0] = i;
+        }
+        for (int j = 0; j <= cnt2; j++) {
+            dp[0][j] = j;
+        }
+        // printf("\n\n");
+        for (int i = 1; i<= cnt; i++) {
+            for (int j = 1;j <= cnt2; j++){ 
+                int k = 1;
+                strcpy(buf, file1s[i]);
+                strcpy(buf2, file2s[j]);
+                // printf("%s <vs> %s: \n", file1s[i], file2s[j]);
+                // printf("%d\n", strcmp(file1s[i], file2s[j]));
+                if (!strcmp(buf, buf2)) {
+                    // printf("%s <vs> %s", file1s[i], file2s[j]);
+                    k = 0;
+                }
+                
+                int a = dp[i - 1][j] + 1;
+                int b = dp[i][j - 1] + 1;
+                int c = dp[i - 1][j - 1] + k;
+                int t = a;
+                if (t > b) t = b;
+                if (t > c) t = c;
+
+                dp[i][j] = t;
+                
+            }
+        }
+
+        // for (int i = 0; i <= cnt; i++) {
+        //     for (int j = 0; j <= cnt2; j++) {
+        //         printf("%d ", dp[i][j]);
+        //     }
+        //     printf("\n");
+        // }
+        // printf("res: %d\n", dp[cnt][cnt2]);
+
+        // printf("cnt : %d %d\n", cnt, cnt2);
+        
+        int res = dp[cnt][cnt2];
+
+        if (cnt > cnt2) {
+            int same = cnt - res;
+            int modi = cnt2 - same;
+            int add = res - modi;
+            // printf("%d %d %d\n", same, modi, add);
+            plus += add + modi;
+            minus += modi;
+        }
+        else if (cnt == cnt2){
+            plus += res;
+            minus += res;
+        }
+        else {
+            int same = cnt2 - res;
+            int modi = cnt - same;
+            int del = res - modi;
+            // printf("%d %d %d\n", same, modi, del);
+            plus += modi;
+            minus += del + modi;
+        }
+        
+    
+
+        for (int i = 1; i<= cnt; i++) {
+            free(file1s[i]);
+        }
+        for (int i = 1; i<= cnt2; i++) {
+            free(file2s[i]);
+        }
+        // free(file1s);
+        // free(file2s);
+        fclose(fp);
+        fclose(fp2);
+        return;
+
+    }
+   
+}
 /// @brief final call to store filedirs to tracked / untracked queue. initstatus() -
-/// @brief -> makeUnionofMockReal -> managelogrecurs is must to call.
+/// @brief -> makeUnionofMockReal -> managelogrecurs is must to call
+/// @param mod mod 0 : for status 1 for commit
 /// @return succed
-int store2pockets() {
+int store2pockets(int mod) {
     filedir * root = version_cursor->root;
 
     q = *initQueue();
@@ -1191,23 +1374,25 @@ int store2pockets() {
             
             if (child->istrack == 1) {
                 if (child->chk == -1) continue;
+
+                /**
+                 * TODO: edit distance
+                */
                 tracked.push(&tracked, child);
                 if (child->chk == -2) {//new
-                    plus += child->top->statbuf.st_size;
+                    if (mod == 1)
+                        calcchange(child, child->top);
                 }
                 if (child->chk == 1) { //mod
                     filever * prev = child->top->next;
-                    int diff = child->top->statbuf.st_size - prev->statbuf.st_size;
-                    if (diff > 0) {
-                        plus += diff;
-                    }
-                    else {
-                        minus -= diff;
-                    }
+                    if (mod == 1)
+                        calcchange(child, prev);
                 }
                 if (child->chk == 2) {//del
                     filever * prev = child->top->next;
-                    minus += prev->statbuf.st_size;
+                    // minus += prev->statbuf.st_size;
+                    if (mod == 1)
+                        calcchange(child, child->top->next);
                 }
             }
             else {

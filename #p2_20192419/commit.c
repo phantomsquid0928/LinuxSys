@@ -26,18 +26,17 @@ int main(int argc, char * argv[]) {
 
     if ((loadres = load_commit_log()) < 0) {
         if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
         }
         printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
 
-    printf("helo");
     char targetpath[MAXPATH];
     strcpy(targetpath, repopath);
-    printf("%s\n", repopath);
-    printf("%s\n", staginglogpath);
-    printf("%s\n", commitlogpath);
+    // printf("%s\n", repopath);
+    // printf("%s\n", staginglogpath);
+    // printf("%s\n", commitlogpath);
     char purename[MAXDIR];
     if (strstr(argv[1], "\"") || strstr(argv[1], "'")) {
         sprintf(purename, "%s", substr(argv[1], 1, strlen(argv[1]) - 1));
@@ -48,7 +47,7 @@ int main(int argc, char * argv[]) {
     strcat(targetpath, "/");
     strcat(targetpath, purename);
 
-    printf("backup named; %s\n", targetpath);
+    // printf("backup named; %s\n", targetpath);
     if (iscommitexists(purename) == 1) {
         printf("%s is already exist in repo\n", purename);
         exit(3);
@@ -63,13 +62,13 @@ int main(int argc, char * argv[]) {
 
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
         }
         printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
 
-    store2pockets();
+    store2pockets(1);
 
 
 /////////////////////before is completely same routine with status.c
@@ -77,9 +76,10 @@ int main(int argc, char * argv[]) {
 
     if (tracked.empty(&tracked) == 1) //empty //test
     {
-        printf("Nothing changed with last commit\n");
+        printf("Nothing to commit\n");
         exit(0);
     }
+    printf("commit to \"%s\"\n", purename);
 
     char * cwd = getcwd(NULL, 0);
     int len = strlen(cwd);
@@ -106,8 +106,8 @@ int main(int argc, char * argv[]) {
         strcat(curpath, "/");
         strcat(curpath, relpath);
 
-        printf("%s is under working\n", curpath);
-        printf("remove target will be %s\n", targetpath);
+        // printf("%s is under working\n", curpath);
+        // printf("remove target will be %s\n", targetpath);
         
         if (f->chk != 2) {
             mkdirs(substr(curpath, 0, return_last_name(curpath)));
@@ -132,9 +132,9 @@ int main(int argc, char * argv[]) {
 
             char buf[4096];
             int len;
-            while((len = read(originfd, buf, sizeof(buf))) > 0) {
-                write(commitfd, buf, len);
-            }
+            // while((len = read(originfd, buf, sizeof(buf))) > 0) {
+            //     write(commitfd, buf, len);
+            // }
             struct utimbuf temptime;
             struct stat statbuf;
             if (lstat(f->oripath, &statbuf) < 0) {
@@ -156,15 +156,15 @@ int main(int argc, char * argv[]) {
          * TODO: save_commit_log queue, flush 형태로 바꾸기?
         */
 
-        if (save_commit_log(purename, f->oripath, f->chk) < 0) {
-            printf("failed to write log");
-            printf("%s %s %d\n", purename, f->oripath, f->chk);
-            rmdirs(targetpath);
-            printf("removing %s\n", targetpath);
-            close(commitfd);
-            close(originfd);
-            exit(1);
-        }
+        // if (save_commit_log(purename, f->oripath, f->chk) < 0) {
+        //     printf("failed to write log");
+        //     printf("%s %s %d\n", purename, f->oripath, f->chk);
+        //     rmdirs(targetpath);
+        //     printf("removing %s\n", targetpath);
+        //     close(commitfd);
+        //     close(originfd);
+        //     exit(1);
+        // }
 
 
         char type[MAXDIR];
@@ -180,5 +180,6 @@ int main(int argc, char * argv[]) {
         printf("%s\n", f->name);
 
     }
-
+    printf("\n");
+    exit(0);
 }
