@@ -1503,25 +1503,28 @@ int load_commit_log() {
         int argc = 0;
         // printf("%s\n", buf);
         char ** args;
-        args = split(buf, "-", &argc);
+        args = split(buf, ":", &argc);
 
-        char * commit_name = substr(args[0], 9, strlen(args[0]) - 2);
+        char * commit_name = NULL;
         char * target_temp = NULL;
         int status = -1;
         // printf("commit_name : :%s:\n", commit_name);
-        if (strstr(args[1], "new file:") != NULL) {
-            target_temp = substr(args[1], 11, strlen(args[1]));
+        if (strstr(args[1], "new file") != NULL) {
+            target_temp = substr(args[2], 2, strlen(args[2]) - 1);
+            commit_name = substr(args[1], 2, strlen(args[1]) - 12);
             // printf("  new : :%s:\n", target_name);
             // char * name = substr(target_path, );
             status = -2;
         }
-        else if (strstr(args[1], "modified:") != NULL) {
-            target_temp = substr(args[1], 11, strlen(args[1]));
+        else if (strstr(args[1], "modified") != NULL) {
+            target_temp = substr(args[2], 2, strlen(args[2]) - 1);
+            commit_name = substr(args[1], 2, strlen(args[1]) - 12);
             // printf("  modified : :%s:\n", target_name);
             status = 1;
         }
-        else if (strstr(args[1], "removed:") != NULL) {
-            target_temp = substr(args[1], 10, strlen(args[1]));
+        else if (strstr(args[1], "removed") != NULL) {
+            target_temp = substr(args[2], 2, strlen(args[2]) - 1);
+            commit_name = substr(args[1], 2, strlen(args[1]) - 11);
             // printf("  removed : :%s:\n", target_name);
             status = 2;
         } else {
@@ -1530,6 +1533,8 @@ int load_commit_log() {
         }
         char target_path[MAXPATH];
         strcpy(target_path, target_temp);
+
+        // printf("%s %s\n", commit_name, target_temp);
         
         char * relpath = substr(target_path, strlen(cwdpath) + 1, strlen(target_path));
         char version_path[MAXPATH];
@@ -1591,7 +1596,7 @@ int save_commit_log(char * stamp, char * oripath, int mod) {
     else {
         return -1;
     }
-    fprintf(fp, "commit: \"%s\" - %s%s\n", stamp, msg, oripath);
+    fprintf(fp, "commit: \"%s\" - %s\"%s\"\n", stamp, msg, oripath);
     fclose(fp);
     return 0;
 }
