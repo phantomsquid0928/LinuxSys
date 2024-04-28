@@ -88,7 +88,6 @@ char * purifypath(char * path) {
     {
         mod = 1;
     }
-    printf("here");
     strcpy(newpath, "");
     char * arg = strtok(path, "/");
     char * argtemp;
@@ -991,25 +990,7 @@ int makeUnionofMockReal() {
                     j++;
                     continue;
                 }
-                // if (access(f->childs[i]->oripath, F_OK)) { //removed
-                //     printf("YOU CALLED?");
-                //     if (f->childs[i]->top->status == 2) {
-                //         f->childs[i]->chk = -1; //removed long time ago and keeping its state
-                //         i++;
-                //         j++;
-                //         continue;
-                //     }
-                //     else {
-                //         f->childs[i]->chk = 2; //removed right before.
-                //     }
-                    
-                //     filever * v = newversion();
-                //     v->status = 2;
-                //     addversion(f->childs[i], v);
-                //     i++;
-                //     j++;
-                //     continue;
-                // }
+                
                 if (lstat(f->childs[i]->oripath, &statbuf) < 0) {
                     printf("fk");
                     return -1;
@@ -1024,24 +1005,7 @@ int makeUnionofMockReal() {
                     j++;
                     continue;
                 }
-                
-                // int res = compare_md5(child->oripath, verpath);
-
-                // if (statbuf.st_size == f->childs[i]->top->statbuf.st_size && res == 0) {
-                //     printf("%s got no change\n", child->name);
-                //     continue;
-                // }
-                // else {
-                //     if (res < 0) {
-                //         fprintf(stderr, "error while reverting files... md5\n");
-                //         exit(1);
-                //     }
-                //     if (res == 0) {
-                //         //same
-                //         printf("%s got no change\n", child->name);
-                //         continue;
-                //     }
-                // }
+            
 
 
                 if (statbuf.st_size != f->childs[i]->top->statbuf.st_size) {//modified
