@@ -781,7 +781,7 @@ void show_fs(filedir * cur, char * padding) {
     //     return;
     // }
     printf("%s", cur->name);
-    printf("  dir %p\n", cur);
+    printf("  dir %d %p\n", cur->childscnt, cur);
     for (int i = 0;i < cur->childscnt + 1; i++) {
         char curpad[1000];
         char nextpad[1000];
@@ -859,10 +859,12 @@ queue tracked;
 int plus;
 int minus;
 queue untracked;
+queue baddirs;
 void initstatus(){
     q = *initQueue();
     tracked = *initQueue();
     untracked = *initQueue();
+    baddirs = *initQueue();
     plus = 0;
     minus = 0;
 }
@@ -984,16 +986,17 @@ int makeUnionofMockReal() {
             if (res == 0) {
                 tchild[rescnt] = f->childs[i];
                 rescnt++;
-                if (f->childs[i]->childscnt != -1) { //dir
-                    q.push(&q, f->childs[i]);
-                    i++;
-                    j++;
-                    continue;
-                }
+                
                 
                 if (lstat(f->childs[i]->oripath, &statbuf) < 0) {
                     printf("fk");
                     return -1;
+                }
+                if (S_ISDIR(statbuf.st_mode)) { //dir
+                    q.push(&q, f->childs[i]);
+                    i++;
+                    j++;
+                    continue;
                 }
                 if (f->childs[i]->top->status == 2) { //file that has same name with commited, deleted  come back here...
                     f->childs[i]->chk = -2; //new! 
@@ -1127,9 +1130,35 @@ int makeUnionofMockReal() {
             f->childs[i] = tchild[i];
             // printf("%d ", f->childs[i]->chk);
         }
+        if (rescnt == 0) //empty dir.
+        {
+            baddirs.push(&baddirs, f);
+        }
         // free(tchild);
     }
     // free(&q);
+
+
+    // //remove empty dirs that have no commits, and no real files
+    while(!baddirs.empty(&baddirs)) {
+        filedir * f = baddirs.front(&baddirs);
+        baddirs.pop(&baddirs);
+        char * parentpath = substr(f->oripath, 0, return_last_name(f->oripath));
+        filedir * parent = search_filedir(parentpath);
+
+        int chk = 0;
+        for(int i= 0;i < parent->childscnt; i++) {
+            if (chk == 0 && !strcmp(parent->childs[i]->oripath, f->oripath)) {
+                chk = 1;
+            }
+            if (chk == 1) {
+                parent->childs[i] = parent->childs[i + 1];
+            }
+        }
+        parent->childs[parent->childscnt] = NULL;
+        parent->childs = realloc(parent->childs, parent->childscnt - 1);
+        parent->childscnt--;
+    }
     return 1;
 }
 
@@ -1315,7 +1344,8 @@ void calcchange(filedir * f, filever * v) {
 int store2pockets(int mod) {
     filedir * root = version_cursor->root;
 
-    q = *initQueue();
+    // q = *initQueue();
+    q.clear(&q);
     q.push(&q, root);
     //root is ignored.
 
