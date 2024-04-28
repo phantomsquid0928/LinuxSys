@@ -79,7 +79,7 @@ char ** split(char * command, char * spliter, int *res) {
 char * purifypath(char * path) {
     int cnt = 0;
     int mod = 0;
-    char * newpath = (char*)malloc(sizeof(char) * (sizeof(path) + 1));
+    char * newpath = (char*)malloc(sizeof(char) * (sizeof(path) + 2));
     
     if (strstr(path, "\"") == NULL && strstr(path, "'") == NULL) {
         return realpath(path, 0);
@@ -88,7 +88,7 @@ char * purifypath(char * path) {
     {
         mod = 1;
     }
-    strcpy(newpath, "");
+    strcpy(newpath, ".");
     char * arg = strtok(path, "/");
     char * argtemp;
     int chk = 1;
@@ -724,6 +724,7 @@ filedir * addfiledir(filedir * target) { //always comes file
 /// @return fildir 
 filedir * search_filedir(char * oripath) { 
     filedir * temp = version_cursor->root;
+    if (!strcmp(temp->oripath, oripath)) return temp;
     char * relpath = substr(oripath, strlen(temp->oripath), strlen(oripath));
 
     // printf("ffffs]%s\n", relpath);
@@ -769,7 +770,7 @@ filedir * search_filedir(char * oripath) {
             return NULL;
         }
     }
-    return temp; //root, as root is res = 0, comes right here
+    return NULL; //root, as root is res = 0, comes right here
 }
 
 
@@ -1130,7 +1131,7 @@ int makeUnionofMockReal() {
             f->childs[i] = tchild[i];
             // printf("%d ", f->childs[i]->chk);
         }
-        if (rescnt == 0) //empty dir.
+        if (rescnt == 0 && f != root) //empty dir.
         {
             baddirs.push(&baddirs, f);
         }
@@ -1156,7 +1157,7 @@ int makeUnionofMockReal() {
             }
         }
         parent->childs[parent->childscnt] = NULL;
-        parent->childs = realloc(parent->childs, parent->childscnt - 1);
+        parent->childs = realloc(parent->childs, parent->childscnt);
         parent->childscnt--;
     }
     return 1;

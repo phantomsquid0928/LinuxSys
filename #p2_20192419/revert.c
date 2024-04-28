@@ -201,6 +201,9 @@ int main(int argc, char * argv[]) {
 
 void restore(char * path, char * path2) {
     int originfd, commitfd;
+    char * dirpath;
+    dirpath = substr(path2, 0, return_last_name(path2));
+    mkdirs(dirpath);
     if ((originfd = open(path2, O_WRONLY | O_CREAT | O_TRUNC, 0777)) < 0) {
         printf("failed to revert\n");
         printf("path : %s", path2);
