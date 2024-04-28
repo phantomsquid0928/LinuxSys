@@ -269,6 +269,7 @@ typedef struct filedir {
     int chk;       //indicates current status compared to latest ver. compared to top: chk = -1 : existing, no change   chk = 0 / -2 new    chk= 1 modify   chk= 2 remove
     int istrack;   //chk whether this file is being tracked 0 : no 1 : yes
     filever * target; //use when make revert?
+    int isreg; //  0 : dir, 1 : file, childscnt is not enough for distinguish file / dir
 
     struct filedir ** childs; //adds when newfile comes in
     int childscnt;
@@ -380,7 +381,7 @@ int managelogrecurs(char * target, int mod) {
     // printf("foudn : %s\n\n", f->oripath);
     if (f == NULL) return 0;
 
-    if (f->childscnt == -1) {
+    if (f->isreg == 1) {
         if(mod == 0) {//add
             res += (f->istrack == 0) ? 1 : 0;
             f->istrack = 1;
@@ -401,7 +402,7 @@ int managelogrecurs(char * target, int mod) {
         for (int i =0 ; i<= cur->childscnt; i++) {
             filedir * next = cur->childs[i];
             
-            if (next->childscnt != -1) {
+            if (next->isreg == 0) {
                 q.push(&q, next);
                 continue;
             }
@@ -686,6 +687,7 @@ filedir * addfiledir(filedir * target) { //always comes file
                 else { //no dir...
                     // printf("seeking\n");
                     filedir * newfiledir = newfile();
+                    newfiledir->isreg = 0;
                     strcpy(newfiledir->name, args[i]);
                     strcpy(newfiledir->oripath, curpath);
                     temp->childs[end] = newfiledir;
@@ -708,6 +710,7 @@ filedir * addfiledir(filedir * target) { //always comes file
                 // printf("adding new dir\n");
                 temp->childs = (filedir**)malloc(sizeof(filedir*));
                 filedir * newfiledir = newfile();
+                newfiledir->isreg = 0;
                 strcpy(newfiledir->name, args[i]);
                 strcpy(newfiledir->oripath, curpath);
                 temp->childs[0] = newfiledir;
@@ -795,7 +798,7 @@ void show_fs(filedir * cur, char * padding) {
             sprintf(nextpad, "%s   │ ", padding);
         }
         
-        if (cur->childs[i]->childscnt == -1) { //file
+        if (cur->childs[i]->isreg == 1) { //file
             printf("%s%s", curpad, cur->childs[i]->name);
             printf(" file");
             printf(" latest : %s %p    chk ;%d status: %d istracking : %d\n", cur->childs[i]->top->version
@@ -830,7 +833,7 @@ void show_fs_all(filedir * cur, char * padding) {
             sprintf(nextpad, "%s   │ ", padding);
         }
         
-        if (cur->childs[i]->childscnt == -1) { //file
+        if (cur->childs[i]->isreg == 1) { //file
             printf("%s%s", curpad, cur->childs[i]->name);
             // printf(" file");
             // printf(" latest : %s %p    chk ;%d status: %d istracking : %d\n", cur->childs[i]->top->version
@@ -860,12 +863,12 @@ queue tracked;
 int plus;
 int minus;
 queue untracked;
-queue baddirs;
+// queue baddirs;
 void initstatus(){
     q = *initQueue();
     tracked = *initQueue();
     untracked = *initQueue();
-    baddirs = *initQueue();
+    // baddirs = *initQueue();
     plus = 0;
     minus = 0;
 }
@@ -939,10 +942,12 @@ int makeUnionofMockReal() {
                 v->status = -2;
                 addversion(n, v);
                 if (S_ISREG(statbuf.st_mode)) {
+                    n->isreg = 1;
                     j++;
                     continue;
                 }
                 else if (S_ISDIR(statbuf.st_mode)) { //dir contains new
+                    n->isreg = 0;
                     q.push(&q, n);
                     j++;
                     continue;
@@ -956,7 +961,7 @@ int makeUnionofMockReal() {
                 if (i > f->childscnt) break;
                 tchild[rescnt] = f->childs[i]; 
                 rescnt++;
-                if (f->childs[i]->childscnt != -1) {
+                if (f->childs[i]->isreg == 0) {
                     q.push(&q, f->childs[i]);
                     i++;
                     continue;
@@ -1065,7 +1070,7 @@ int makeUnionofMockReal() {
             if (res < 0) { //removed staged / unstaged
                 tchild[rescnt] = f->childs[i];
                 rescnt++;
-                if (f->childs[i]->childscnt != -1) { //dir that contains removed
+                if (f->childs[i]->isreg == 0) { //dir that contains removed
                     q.push(&q, f->childs[i]);
                     i++;
                     continue;
@@ -1107,11 +1112,13 @@ int makeUnionofMockReal() {
                 v->status = -2;
                 addversion(n, v);
                 if (S_ISREG(statbuf.st_mode)) {
+                    n->isreg = 1;
                     n->chk = -2;
                     j++;
                     continue;
                 }
                 else if (S_ISDIR(statbuf.st_mode)) { //dir contains new
+                    n->isreg = 0;
                     q.push(&q, n);
                     j++;
                     continue;
@@ -1131,35 +1138,35 @@ int makeUnionofMockReal() {
             f->childs[i] = tchild[i];
             // printf("%d ", f->childs[i]->chk);
         }
-        if (rescnt == 0 && f != root) //empty dir.
-        {
-            baddirs.push(&baddirs, f);
-        }
+        // if (rescnt == 0 && f != root) //empty dir.
+        // {
+        //     baddirs.push(&baddirs, f);
+        // }
         // free(tchild);
     }
     // free(&q);
 
 
     // //remove empty dirs that have no commits, and no real files
-    while(!baddirs.empty(&baddirs)) {
-        filedir * f = baddirs.front(&baddirs);
-        baddirs.pop(&baddirs);
-        char * parentpath = substr(f->oripath, 0, return_last_name(f->oripath));
-        filedir * parent = search_filedir(parentpath);
+    // while(!baddirs.empty(&baddirs)) {
+    //     filedir * f = baddirs.front(&baddirs);
+    //     baddirs.pop(&baddirs);
+    //     char * parentpath = substr(f->oripath, 0, return_last_name(f->oripath));
+    //     filedir * parent = search_filedir(parentpath);
 
-        int chk = 0;
-        for(int i= 0;i < parent->childscnt; i++) {
-            if (chk == 0 && !strcmp(parent->childs[i]->oripath, f->oripath)) {
-                chk = 1;
-            }
-            if (chk == 1) {
-                parent->childs[i] = parent->childs[i + 1];
-            }
-        }
-        parent->childs[parent->childscnt] = NULL;
-        parent->childs = realloc(parent->childs, parent->childscnt);
-        parent->childscnt--;
-    }
+    //     int chk = 0;
+    //     for(int i= 0;i < parent->childscnt; i++) {
+    //         if (chk == 0 && !strcmp(parent->childs[i]->oripath, f->oripath)) {
+    //             chk = 1;
+    //         }
+    //         if (chk == 1) {
+    //             parent->childs[i] = parent->childs[i + 1];
+    //         }
+    //     }
+    //     parent->childs[parent->childscnt] = NULL;
+    //     parent->childs = realloc(parent->childs, parent->childscnt);
+    //     parent->childscnt--;
+    // }
     return 1;
 }
 
@@ -1356,7 +1363,7 @@ int store2pockets(int mod) {
 
         for (int i= 0; i<= cur->childscnt; i++) {
             filedir * child = cur->childs[i];
-            if (child->childscnt != -1) { //dir
+            if (child->isreg == 0) { //dir
                 q.push(&q, child);
                 continue;
             }
@@ -1541,6 +1548,7 @@ int load_commit_log() {
         strcpy(f->oripath, target_path);
         strcpy(f->path, version_path);
         strcpy(v->version, commit_name);
+        f->isreg = 1;
         v->status = status;
         addversion(f, v);
         if (status != 2)
@@ -1678,6 +1686,7 @@ void init() {
 void init_version_controller() {
     version_cursor = (control*)malloc(sizeof(control));
     filedir * root = newfile();
+    root->isreg = 0;
     char cwd[MAXDIR];
     strcpy(cwd, getcwd(NULL, 0));
     char * name = substr(cwd, return_last_name(cwd) + 1, strlen(cwd));

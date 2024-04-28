@@ -101,7 +101,7 @@ int main(int argc, char * argv[]) {
         for (int i = 0; i <= f->childscnt; i++){ 
             filedir * child = f->childs[i];
             filever * nv = child->top;
-            if (child->childscnt != -1) {
+            if (child->isreg == 0) {
                 q.push(&q, child);
                 continue;
             }
