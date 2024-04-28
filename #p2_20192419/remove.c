@@ -28,14 +28,23 @@ int main(int argc, char * argv[]) {
     init_version_controller();
     initstatus(); 
 
+    int loadres;
+
+    if ((loadres = load_commit_log()) < 0) {
+        if (loadres == -1) {
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
+        }
+        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+        exit(3);
+    }
+
     int errcode;
     if ((errcode = makeUnionofMockReal()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
         printf("%d error", errcode);
         exit(1);
     }
 
-    
-    int loadres = 0;
+
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
             printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
