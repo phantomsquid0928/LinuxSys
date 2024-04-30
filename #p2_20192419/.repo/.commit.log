@@ -1,0 +1,5 @@
+commit: "first commit" - new file: /home/ph/linuxhw/#p2_20192419/a.txt
+commit: "first commit" - new file: /home/ph/linuxhw/#p2_20192419/a/a.txt
+commit: "second commit" - modified: /home/ph/linuxhw/#p2_20192419/a.txt
+commit: "second commit" - removed: /home/ph/linuxhw/#p2_20192419/a/a.txt
+commit: "second commit" - new file: /home/ph/linuxhw/#p2_20192419/a/b/c.txt
