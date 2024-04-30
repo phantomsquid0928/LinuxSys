@@ -13,8 +13,8 @@ int main(int argc, char * argv[]) {
     }
     char * purepath = purifypath(argv[1]); //argv contains ""
     // printf("%s\n", purepath);
-    if (strlen(argv[1]) > MAXPATH) {
-        printf("ERROR: '%s' is wrong path\n", purepath);
+    if (purepath == NULL || strlen(purepath) > MAXPATH) {
+        printf("ERROR: '%s' is wrong path\n", argv[1]);
         exit(2);
     }
     if (argc > 2) {
@@ -22,14 +22,38 @@ int main(int argc, char * argv[]) {
         exit(4);
     }
     init();
-    int loadres = 0;
+
+    /// routine of   initstatus -> makeUnionofMockReal -> load_staging_log -> managelogrecurs != 0 then -> save_staging_log : for add, remove.
+    // this routine above will only chks real files\ (not commited files), calc istracked on fs.
+    init_version_controller();
+    initstatus(); 
+
+    int loadres;
+
+    if ((loadres = load_commit_log()) < 0) {
+        if (loadres == -1) {
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
+        }
+        printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
+        exit(3);
+    }
+
+    int errcode;
+    if ((errcode = makeUnionofMockReal()) < 0) { //makefs = only from commit and real file input, descremenate mod, del, new, nonchange
+        printf("%d error", errcode);
+        exit(1);
+    }
+
+
     if ((loadres = load_staging_log()) < 0) {
         if (loadres == -1) {
-            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first");
+            printf("ERROR: repo didn't initialized, you have to call ssu_repo to init repo first\n");
         }
         // printf("FATAL: LOG FILE CORRUPTED OR NOT EXISTS");
         exit(3);
     }
+
+    // show_fs(version_cursor->root, "");
     
     char * abpath = realpath(purepath, NULL);
     if (abpath == NULL) {
@@ -74,7 +98,7 @@ int main(int argc, char * argv[]) {
     char * temp = substr(abpath_copy, strlen(cwd), strlen(abpath_copy));
     strcat(relpath, temp);// need mod
     
-    if (dellogrecurs(abpath) == 0) { //trying to remove but there was no valid target... //warning abpath becomes NULL, use abpath_copy
+    if (managelogrecurs(abpath, 1) == 0) { //trying to remove but there was no valid target... //warning abpath becomes NULL, use abpath_copy
         printf("\"%s\" already removed from stage area\n", relpath);
         exit(0);
     }
