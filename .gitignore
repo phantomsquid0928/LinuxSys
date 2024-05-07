@@ -22,3 +22,6 @@ logremove
 revert
 ssu_repo
 status
+#p3_20192419/test.c
+#p3_20192419/ssu_sync
+#p3_20192419/a.out
