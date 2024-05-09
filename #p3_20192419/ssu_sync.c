@@ -1,5 +1,9 @@
 #include "phantomutils.h"
 
+int cnt = 3;
+int make_daemon() {
+    return cnt++;
+}
 void addfunc(int argc, char * argv[]) {
     int c = -1;
     int mod = 0;
@@ -59,8 +63,21 @@ void addfunc(int argc, char * argv[]) {
         }
     }
 
+    /**
+     * TODO: opt manage.
+     * TODO: dup manage
+    */
 
-
+    monitorlist * newmon = newmlog();
+    int pid = -1;
+    if ((pid = make_daemon()) < 0) {
+        fprintf(stderr, "make daemon failed\n");
+        return;
+    }
+    newmon->pid = pid;
+    strcpy(newmon->path, path);
+    pushmlog(newmon);
+    save_monitor_log();
     printf("path : %s\t mod : %d %d\n", path, mod, period);
 }   
 void removefunc(int argc, char * argv[]) {
@@ -76,30 +93,74 @@ void removefunc(int argc, char * argv[]) {
     }
     int pid = atoi(argv[1]);
 
+    if (removemlog(pid) < 0) {
+        fprintf(stderr, "failed to remove pid as pid is invalid\n");
+        return;
+    }
+    /**
+     * TODO: KILL PROCESS PID
+    */
+   //
+    // kill(pid, )
+    save_monitor_log();
 
+    //remove pid(kill) from process, list, files
 }
 void listfunc(int argc, char * argv[]) {
     if (argc > 2) {
-        removehelp();
+        listhelp();
         return;
     }
     int pid = -1;
     if (argc ==2) {
         for (int i = 0; i < strlen(argv[1]); i++) {
             if (isdigit(argv[1][i]) == 0) {
-                    removehelp();
-                    return;
+                listhelp();
+                return;
             }
         }
         pid = atoi(argv[1]);
     }
-    
+
     if (pid == -1) {
+        //showmlog
+        monitorlist * temp = head;
+        while(temp) {
+            printf("%d : %s\n", temp->pid, temp->path);
+            temp = temp->next;
+        }
+        return;
+    }
+    else {
+        /**
+         * TODO: search pid from mlog and get root
+         * TODO: if not exists then err or continue
+         * TODO: from root make fs?
+         * TODO: then showfs will be clear as pid folder is dirty.
+        */
+        monitorlist * temp = head;
+        while(temp) {
+            if (temp->pid == pid) {
+                break;
+            }
+            temp = temp->next;
+        }
+        if (temp == NULL) {
+            printf("no such pid is under process\n");
+            return;
+        }
+        char targetpath[MAXPATH];
+        sprintf(targetpath, "%s/%d.log", backuppath, pid);
+        if (access(targetpath, F_OK)) {
+            fprintf(stderr, "backup file corrupted");
+            exit(10);
+        }
+        
+
 
     }
-    else {//tree
-
-    }
+    
+    //tree
 
 
 }
@@ -135,6 +196,8 @@ int main(void) {
     
     printf("%s\n", logpath);
 
+    load_monitor_log();
+
     while(1) {
         printf("20192419>");
         memset(input, 0, sizeof(input));
@@ -145,7 +208,7 @@ int main(void) {
         int valid = 1;
         char ** args = commandsplit(input, " ", &res, &valid);
         for (int i =0 ;i < res; i++) {
-            printf("%d : %s \n", i, args[i]);
+            printf("input %d : %s \n", i, args[i]);
         }
         if (res == 0) continue;
         if (valid != 0) {

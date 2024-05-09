@@ -13,6 +13,7 @@
 #include <features.h>
 #include <utime.h>
 #include <ctype.h>
+#include <time.h>
 
 #include <openssl/md5.h>
 
@@ -214,6 +215,14 @@ void mkdirs(char * path) { //path is always dir
     }
 }
 
+int isvalidpath(char * path) {
+    char * ptr = NULL;
+    if ((ptr = strstr(path, getenv("HOME"))) != NULL && (int)(path - ptr) == 0) {
+        return 1;
+    }
+    return 0;
+}
+
 void addhelp(void) {
     printf("add <PATH> [OPTION]... : add new daemon process of <PATH> if <PATH> is file\n");
     printf("\t-d : add new daemon process of <PATH> if <PATH> is directory\n");
@@ -242,6 +251,101 @@ char * homepath;
 char * backuppath;
 char logpath[MAXPATH];
 
+typedef struct monitorlist{
+    int pid;
+    char path[MAXPATH];
+    struct monitorlist * next;
+}monitorlist;
+typedef struct filever{
+    time_t time;
+    int status;
+    char path[MAXPATH];
+    struct filever * next;
+}filever;
+typedef struct filedir {
+    char name[MAXDIR];
+    char path[MAXPATH];// version path
+    char oripath[MAXPATH]; //original path
+    filever * head;
+    filever * rear;
+    int chk;       //indicates current status compared to latest ver. compared to top: chk = -1 : existing, no change   chk = 0 / -2 new    chk= 1 modify   chk= 2 remove
+    int istrack;   //chk whether this file is being tracked 0 : no 1 : yesdc    
+    
+    int isreg; //  0 : dir, 1 : file, childscnt is not enough for distinguish file / dir
+
+    struct filedir ** childs; //adds when newfile comes in
+    int childscnt;
+}filedir;
+
+monitorlist * head = NULL;
+monitorlist * rear = NULL;
+
+filever * loghead = NULL; //
+filever * logrear = NULL;
+
+monitorlist * newmlog() {
+    monitorlist * temp = malloc(sizeof(monitorlist));
+    temp->pid = 0;
+    temp->next = NULL;
+    return temp;
+}
+void pushmlog(monitorlist * t) {
+    if (head == NULL) {
+        head = t;
+        rear = t;
+        return;
+    }
+    rear->next = t;
+    rear = t;
+}
+int removemlog(int pid) {
+    if (head == NULL) return -1;
+    monitorlist * temp = head;
+    monitorlist * prev = NULL;
+    while(temp) {
+        if (temp->pid == pid) break;
+        prev = temp;
+        temp = temp->next;
+    }
+    if (temp == NULL) return -1;
+    if (prev == NULL) {
+        head = head->next;
+        free(temp);
+        return 0;
+    }
+    if (temp == rear) {
+        rear = prev;
+        rear->next = NULL;
+        free(temp);
+        return 0;
+    }
+    prev->next = temp->next;
+    free(temp);
+    return 0;
+}
+void clearmlog() {
+    monitorlist * temp = head;
+    monitorlist * prev;
+    while(temp) {
+        prev = temp;
+        temp = temp->next;
+        free(prev);
+    }
+}
+void pushlog(filever * log) {
+    if (loghead == NULL) {
+        loghead = log;
+        logrear = log;
+        return;
+    }
+    logrear->next = log;
+    logrear = log;
+}
+
+void init_fs() {
+    
+}
+
 void init() {
     homepath = getenv("HOME");
     char temp[4096];
@@ -252,17 +356,97 @@ void init() {
     if (access(backuppath, F_OK)) mkdir(backuppath, 0777);
 
     sprintf(logpath, "%s/%s", backuppath, "monitor_list.log");
+    if (access(logpath, F_OK)) {
+        if (open(logpath, O_CREAT, 0777) < 0) fprintf(stderr, "creat error");
+    }
 }
 
 void load_monitor_log() {
-    
+    FILE * fp;
+    if ((fp = fopen(logpath, "r")) == NULL) {
+        fprintf(stderr, "error on fopen");
+        exit(1);
+    }
+    // clearmlog();
+    char buf[MAXPATH * 2];
+    while(1) {
+        int len = fscanf(fp, "%[^\n^\r]", buf);
+        if (len == EOF) break;
+        fgetc(fp);
+        int res = 0;
+        char ** temp = split(buf, ":", &res);
+        int pid = atoi(temp[0]);
+        char * targetpath = substr(temp[1], 1, strlen(temp[1]));
+        
+        monitorlist * log = newmlog();
+        log->pid = pid;
+        strcpy(log->path, targetpath);
+        pushmlog(log);
+
+        printf("%d %s\n", pid, targetpath);
+
+        free(targetpath);
+        free(temp[0]);
+        free(temp[1]);
+        free(temp);
+    }
+    fclose(fp);
+}
+void save_monitor_log() { //truncate
+    FILE * fp;
+    if ((fp = fopen(logpath, "w")) == NULL) {
+        fprintf(stderr, "error on fopen");
+        exit(1);
+    }
+    monitorlist * temp;
+    temp = head;
+
+    while(temp) {
+        fprintf(fp, "%d : %s\n", temp->pid, temp->path);
+        temp = temp->next;
+    }
+
+    fclose(fp);
 }
 void load_pid_log(int pid) {
+    char targetpath[MAXPATH];
+    FILE * fp;
 
+    sprintf(targetpath, "%s/%d", backuppath, pid);
+    if ((fp = fopen(logpath, "r")) == NULL) {
+        fprintf(stderr, "error on fopen");
+        exit(1);
+    }
+    char buf[MAXPATH * 2];
+    while(1) {
+        int len = fscanf(fp, "%[^\n^\r]", buf);
+        if (len == EOF) break;
+        int res = 0;
+        char ** args = split(buf, "[]", &res);
+        //args0 = time_t 1 = status 2 = path
+    }
 }
-void write_monitor_log() { //truncate
+void save_pid_log(int pid, int status, char * tpath) {
+    char targetpath[MAXPATH];
+    FILE * fp;
 
-}
-void write_pid_log(int pid) {
-
+    sprintf(targetpath, "%s/%d", backuppath, pid);
+    if ((fp = fopen(logpath, "a+")) == NULL) {
+        fprintf(stderr, "error on fopen");
+        exit(1);
+    }
+    time_t t;
+    time(&t);
+    char * statusstr;
+    if (status == 0) {
+        statusstr = "create";
+    }
+    else if (status == 1) {
+        statusstr = "modify";
+    }
+    else if (status == 2) {
+        statusstr = "delete";
+    } else exit(44);
+    fprintf(fp, "[%s][%d][%s]", ctime(&t), status , tpath);
+    fclose(fp);
 }
