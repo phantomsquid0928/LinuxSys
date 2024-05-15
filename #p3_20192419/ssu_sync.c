@@ -1,8 +1,112 @@
 #include "phantomutils.h"
 
 int cnt = 3;
+void modify_checker(int pid, filedir * root, char * timemask) { //1초 내에 끝나야 함????
+    if (tracked.empty(&tracked)) return;
+    while(!tracked.empty(&tracked)) {
+        filedir * f = tracked.front(&tracked);
+        tracked.pop(&tracked);
+
+        int originfd, commitfd;
+        
+        char curpath[MAXPATH];
+        // char relpath[MAXPATH];
+
+        char * relpath =  substr(f->oripath, strlen(root->oripath) + 1, strlen(f->oripath));
+
+        if (f->chk != 2) {
+
+            struct stat statbuf;
+            if (lstat(f->oripath, &statbuf) < 0) {
+                printf("failed to do lstat");
+                // rmdirs(targetpath);
+                close(commitfd);
+                close(originfd);
+                exit(1);
+            }
+            
+            sprintf(curpath, "%s/%s_%s", pidrootpath, relpath, timemask);
+
+            mkdirs(substr(curpath, 0, return_last_name(curpath)));
+            
+
+            
+            if ((commitfd = open(curpath, O_WRONLY | O_CREAT, 0777)) < 0) {
+                printf("failed to create commit, %s\n", curpath);
+                // printf("removing %s\n", targetpath);
+                // rmdirs(targetpath);
+                close(originfd);
+                close(commitfd);
+                exit(1);
+            }
+
+            if ((originfd = open(f->oripath, O_RDONLY)) < 0) {
+                printf("error while open file\n");
+                // printf("removing %s\n", targetpath);
+                // rmdirs(targetpath);
+                close(originfd);
+                close(originfd);
+                continue;
+                // exit(1);
+            }
+
+            char buf[4096];
+            int len;
+            while((len = read(originfd, buf, sizeof(buf))) > 0) {
+                write(commitfd, buf, len);
+            }
+            struct utimbuf temptime;
+    
+            temptime.modtime = statbuf.st_mtime;
+            temptime.actime = statbuf.st_atime;
+            utime(curpath, &temptime);
+            
+            close(originfd);
+            close(commitfd);
+        }
+
+        /**
+         * TODOOLD: save_commit_log queue, flush 형태로 바꾸기?
+         * i dunt know wal :P
+        */
+        save_pid_log(pid, f->chk, f->oripath, timemask);
+    }
+}
+static void killer() {
+    exit(0);
+}
 int make_daemon() {
-    return cnt++;
+    pid_t pid;
+    int fd, maxfd;
+    if ((pid = fork()) < 0) {
+        fprintf(stderr, "fork error\n");
+        return -1;
+    }
+    else if (pid != 0) return pid;
+    // if ((pid = fork()) < 0) {
+    //     fprintf(stderr, "fork error\n");
+    //     return -1;
+    // }
+    // else if (pid != 0) exit(0);
+
+    pid = getpid();
+
+    printf("%d is daemon\n", pid);
+    setsid();
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+    // maxfd = getdtablesize();
+
+    // for (fd = 0; fd < maxfd; fd++) 
+    //     close(fd);
+    
+    umask(0);
+    chdir("/");
+    fd = open("/dev/null", O_RDWR);
+    dup(0);
+    dup(0);
+    return 0;
 }
 void addfunc(int argc, char * argv[]) {
     int c = -1;
@@ -62,10 +166,40 @@ void addfunc(int argc, char * argv[]) {
                 return;
         }
     }
+    if (period <= 0) {
+        addhelp();
+        return;
+    }
 
+    struct stat statbuf;
+    if (lstat(path, &statbuf) < 0) {
+        fprintf(stderr, "lstat error\n");
+        exit(1);
+    }
+
+    if ((mod & 3) == 0 && S_ISDIR(statbuf.st_mode)) { //dir but no flag
+        //wrogn
+        addhelp();
+        return;
+    }
+    if ((mod & 3) != 0 && S_ISREG(statbuf.st_mode)) { //file but flag exists
+        //wrong
+        addhelp();
+        return;
+    }
+
+    char * rootpath;
+    if (S_ISDIR(statbuf.st_mode)) {
+        rootpath = path;
+    }
+    else {
+        rootpath = substr(path, 0, return_last_name(path));
+    }
+
+    
     /**
-     * TODO: opt manage.
-     * TODO: dup manage
+     * TODO: opt manage. DONE
+     * TODO: dup manage 
     */
 
     monitorlist * newmon = newmlog();
@@ -74,11 +208,44 @@ void addfunc(int argc, char * argv[]) {
         fprintf(stderr, "make daemon failed\n");
         return;
     }
-    newmon->pid = pid;
-    strcpy(newmon->path, path);
-    pushmlog(newmon);
-    save_monitor_log();
-    printf("path : %s\t mod : %d %d\n", path, mod, period);
+    if (pid == 0) { //daemon, need preprocessing before entering while loop
+        signal(SIGUSR1, killer);
+        int daemon_pid = getpid();
+        filedir * root = newfile();
+        strcpy(root->oripath, rootpath);
+        init_pid(daemon_pid);
+        sleep(10);
+        init_fs();
+        // execlp("./a.out", )
+        // int t = 0;
+        while(1) {
+            time_t t;
+            time(&t);
+            struct tm* tmt;
+            tmt = localtime(&t);
+            char timemask[200];
+            if (strftime(timemask, sizeof(timemask), "%Y%m%d%H%M%S", tmt) == 0) {
+                fprintf(stderr, "failed to make time\n");
+                exit(3);
+            }
+            makeUnionofMockReal(root, t, mod, path);
+            // printf("fff");
+            store2pockets(root);
+            modify_checker(daemon_pid, root, timemask);
+
+            show_fs_all(root, "");
+            sleep(10);
+        }
+        exit(0); //wIERD
+    }
+    else {
+        newmon->pid = pid;
+        strcpy(newmon->path, path);
+        pushmlog(newmon);
+        save_monitor_log();
+        printf("path : %s\t mod : %d %d\n", path, mod, period);
+        return;
+    }
 }   
 void removefunc(int argc, char * argv[]) {
     if (argc != 2) {
@@ -101,8 +268,16 @@ void removefunc(int argc, char * argv[]) {
      * TODO: KILL PROCESS PID
     */
    //
-    // kill(pid, )
     save_monitor_log();
+
+    kill(pid, SIGUSR1);
+    //rmdirs
+    char targetpath[MAXPATH];
+    char targetlogpath[MAXPATH];
+    sprintf(targetpath, "%s/%d", backuppath, pid);
+    sprintf(targetlogpath, "%s/%d.log", backuppath, pid);
+    rmdirs(targetpath);
+    remove(targetlogpath);
 
     //remove pid(kill) from process, list, files
 }

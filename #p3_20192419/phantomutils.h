@@ -251,37 +251,136 @@ char * homepath;
 char * backuppath;
 char logpath[MAXPATH];
 
+char * pidlogpath;
+char * pidrootpath;
+
 typedef struct monitorlist{
     int pid;
     char path[MAXPATH];
     struct monitorlist * next;
 }monitorlist;
 typedef struct filever{
-    time_t time;
-    int status;
+    time_t vertime;
+    int status; //-2 added -1: existing    1 mod 2 removed   indicates action on that version of commit.
     char path[MAXPATH];
+    struct stat statbuf;
     struct filever * next;
 }filever;
 typedef struct filedir {
     char name[MAXDIR];
-    char path[MAXPATH];// version path
-    char oripath[MAXPATH]; //original path
-    filever * head;
-    filever * rear;
-    int chk;       //indicates current status compared to latest ver. compared to top: chk = -1 : existing, no change   chk = 0 / -2 new    chk= 1 modify   chk= 2 remove
-    int istrack;   //chk whether this file is being tracked 0 : no 1 : yesdc    
-    
+    char oripath[MAXPATH];
+
+    filever * head; //oldest
+    filever * rear; //latest
+    int chk;       //indicates current status compared to latest ver. compared to rear: chk = -1 : existing, no change   chk = 0 / -2 new    chk= 1 modify   chk= 2 remove
+
     int isreg; //  0 : dir, 1 : file, childscnt is not enough for distinguish file / dir
 
     struct filedir ** childs; //adds when newfile comes in
     int childscnt;
 }filedir;
 
+
+/**
+ * queue
+*/
+
+typedef struct node {
+	struct node * next;
+	void * data;
+}node;
+typedef struct queue queue;
+typedef struct queue {
+	node * head;
+	node * rear;
+	int size;
+
+	void * (*front)(queue *);
+	void (*pop)(queue *);
+	void (*push)(queue *, void *);
+	int (*empty)(queue *);
+	void (*clear)(queue *);
+}queue;
+
+void * front(queue * self) {
+	if (self->head == NULL) {
+		return NULL;
+	}
+	return self->head->data;
+}
+void pop(queue * self) {
+	node * temp = self->head;
+	if (self->head == NULL) return;
+	
+	if (self->head->next == NULL) {
+		self->head = NULL;
+		self->rear = NULL;
+		self->size = 0;
+		free(temp);
+		return;
+	}
+	self->head = self->head->next;
+	self->size--;
+	free(temp);
+}
+void push(queue * self, void * data) {
+	node * temp = (node *)malloc(sizeof(node));
+	temp->data = data;
+	temp->next = NULL;
+	if (self->head == NULL) {
+		self->head = temp;
+		self->rear = temp;
+		self->size++;
+		return;
+	}
+	self->rear->next = temp;
+	self->rear = temp;
+	self->size++;
+}
+int empty(queue * self) {
+	return self->size == 0 ? 1 : 0;
+}
+void clear(queue * self) {
+	if (self->head == NULL) return;
+	node * n = self->head;
+	node * temp = n;
+	node * prev;
+	while(temp) {
+		prev = temp;
+		temp = temp -> next;
+		free(prev);
+	}
+//	free(prev);
+	self->size = 0;
+	self->head = NULL;
+	self->rear = NULL;
+}
+queue * initQueue() {
+	queue * temp = (queue*)malloc(sizeof(queue));
+	temp->head = NULL;
+	temp->rear = NULL;
+	temp->size = 0;
+
+	temp->front = front;
+	temp->pop = pop;
+	temp->push = push;
+	temp->empty = empty;
+	temp->clear = clear;
+	temp->size = 0;
+
+	return temp;
+}
+
+////////////////////////queue end
+
 monitorlist * head = NULL;
 monitorlist * rear = NULL;
 
-filever * loghead = NULL; //
-filever * logrear = NULL;
+queue q;
+queue tracked;
+
+// filever * loghead = NULL; //
+// filever * logrear = NULL;
 
 monitorlist * newmlog() {
     monitorlist * temp = malloc(sizeof(monitorlist));
@@ -332,18 +431,551 @@ void clearmlog() {
         free(prev);
     }
 }
-void pushlog(filever * log) {
-    if (loghead == NULL) {
-        loghead = log;
-        logrear = log;
+void addversion(filedir * f, filever * t) {
+    if (f->head == NULL) {
+        f->head = t;
+        f->rear = t;
         return;
     }
-    logrear->next = log;
-    logrear = log;
+    f->rear->next = t;
+    f->rear = t;
+    return;
+}
+
+
+
+filedir * newfile() {
+    filedir * temp = (filedir*)malloc(sizeof(filedir));
+    temp->head = NULL;
+    temp->rear = NULL;
+    temp->childs = NULL;
+    temp->childscnt = -1;
+    temp->chk = -1; //not target
+    return temp;
+}
+filever * newversion() {
+    filever * temp = (filever*)malloc(sizeof(filever));
+    temp->next = NULL;
+    temp->status = -1; //existing... 0 -> -1;
+    return temp;
+}
+
+/**
+ * TODO: need root -> path handle
+*/
+
+/// @brief 
+/// @param root must be dir
+/// @param starttime 
+/// @param mod 0 then targetpath is filepath 1 then dirpath
+/// @param targetpath 
+/// @return 
+int makeUnionofMockReal(filedir * root, time_t starttime, int mod, char * targetpath) { 
+    struct stat statbuf;
+    struct dirent ** namelist;
+    int cnt;
+
+    if (mod == 0) {
+        if (root->childscnt == -1) {
+            if (lstat(targetpath, &statbuf) < 0) {
+                fprintf(stderr, "trying to track phantomfile?\n");
+                exit(2);
+            }
+            root->childs = malloc(sizeof(char *));
+            filedir * f = newfile();
+            filever * v = newversion();
+            char fname[MAXDIR];
+            sprintf(fname, "%s", substr(targetpath, return_last_name(targetpath) + 1, strlen(targetpath)));
+            strcpy(f->name, fname);
+            strcpy(f->oripath, targetpath);
+            f->isreg = 1;
+            f->chk = -2;
+
+            v->vertime = starttime;
+            v->statbuf = statbuf;
+            v->status = -2;
+            
+            addversion(f, v);
+            root->childs[0] = f;
+            root->childscnt = 0;
+        }
+        else {
+            filedir * target = root->childs[0];
+            filever * v = newversion();
+            if (access(target->oripath, F_OK)) {
+                if (target->rear->status == 2) {
+                    return 1;
+                }
+                target->chk = 2;
+                v->status = 2;
+                v->vertime = starttime;
+                addversion(target, v);
+
+                return 1;
+            }
+            if (lstat(target->oripath, &statbuf) < 0) {
+                fprintf(stderr, "lstat error, have no permission?\n");
+                exit(2);
+            }
+            if (target->rear->statbuf.st_size != statbuf.st_size) {
+                target->chk = 1;
+                v->statbuf = statbuf;
+                v->status = 1;
+                v->vertime = starttime;
+                addversion(target, v);
+                return 1;
+            }
+            else {
+                char verpath[MAXPATH];
+                
+                strcpy(verpath, pidrootpath);
+                strcat(verpath, "/");
+
+                char relpath[MAXPATH];
+                sprintf(relpath, "%s", substr(target->oripath, strlen(root->oripath) + 1, strlen(target->oripath)));
+                strcat(verpath, relpath);
+                strcat(verpath, "_");
+
+                char mask[200];
+                struct tm *tmt;
+                tmt = localtime(&target->rear->vertime);
+                if (strftime(mask, sizeof(mask), "%Y%m%d%H%M%S", tmt) == 0) {
+                    fprintf(stderr, "failed to make time\n");
+                    exit(3);
+                }
+                strcat(verpath, mask);
+
+                int res = compare_md5(target->oripath, verpath);
+
+                if (res < 0) {
+                    fprintf(stderr, "error while comparing files... md5\n");
+                    // exit(1);ddd
+                }
+                if (res == 0) {
+                    //same
+                    target->chk = -1; 
+                    // tracked.push(&tracked, f->childs[i]); //tracked newfil
+                    return 1;
+                    // printf("%s got no change\n", child->name);
+                }
+                else {
+                    target->chk = 1; //mod
+                    filever * v = newversion();
+                    v->statbuf = statbuf;
+                    v->status = 1;
+                    v->vertime = starttime;
+                    addversion(target, v);
+                    return 1;
+                }
+            }
+        }
+        return 1;
+    }
+
+
+    q.clear(&q);
+    q.push(&q, root); 
+    while(!q.empty(&q)) { // two pointer 사용 필요
+        filedir * f = q.front(&q);
+        q.pop(&q);
+
+        int isbonked = 0;
+        if (access(f->oripath, F_OK)) { //dir / file bonked...
+            isbonked = 1;
+        }
+        if ((cnt = scandir(f->oripath, &namelist, NULL, alphasort)) < 0) { //whole dir erased
+            if (isbonked != 1) {
+                return -1;
+            }
+            cnt = 0;
+        }
+
+        //
+        int i = 0, j = 0;
+        int rescnt = 0;
+        filedir ** tchild = (filedir **)malloc(sizeof(filedir *) * (f->childscnt + 1 + cnt)); //temp size.
+        while(1) {
+            if (j < cnt && (!strcmp(namelist[j]->d_name, ".") || !strcmp(namelist[j]->d_name, ".."))) {
+                j++;
+                continue;
+            }
+            if (i > f->childscnt) { //new
+                if (j == cnt) break;
+                // printf("new!");
+                filedir * n = newfile();
+                n->chk = -2;
+                char nextpath[MAXPATH];
+                strcpy(nextpath, f->oripath);
+                strcat(nextpath, "/");
+                strcat(nextpath, namelist[j]->d_name);
+                strcpy(n->oripath, nextpath);
+                strcpy(n->name, namelist[j]->d_name);
+
+                filever * v = newversion();
+                tchild[rescnt] = n;
+
+                rescnt++;
+
+                if (lstat(nextpath, &statbuf) < 0) {
+                    printf("sssssss");
+                    return -1;
+                }
+                v->statbuf = statbuf;
+                v->status = -2;
+                v->vertime = starttime;
+                addversion(n, v);
+                if (S_ISREG(statbuf.st_mode)) {
+                    n->isreg = 1;
+                    j++;
+                    continue;
+                }
+                else if (S_ISDIR(statbuf.st_mode)) { //dir contains new
+                    n->isreg = 0;
+                    if ((mod & 2) != 0) //-r exists
+                        q.push(&q, n);
+                    j++;
+                    continue;
+                }
+                else {
+                    printf("sss");
+                    return -1;
+                }
+            }
+            if (j == cnt) { // removed, i
+                if (i > f->childscnt) break;
+                tchild[rescnt] = f->childs[i]; 
+                rescnt++;
+                if (f->childs[i]->isreg == 0) {
+                    if ((mod & 2) != 0)
+                        q.push(&q, f->childs[i]);
+                    i++;
+                    continue;
+                }
+
+                if (f->childs[i]->rear->status == 2) {
+                    f->childs[i]->chk = -1; //removed long time ago and keeping its state
+                    i++;
+                    continue;
+                }
+                else {
+                    f->childs[i]->chk = 2; //removed right before.
+                }
+                f->childs[i]->chk = 2;
+
+                filever * v = newversion();
+                v->status = 2;
+                v->vertime = starttime;
+                addversion(f->childs[i], v);
+
+                i++;
+                continue;
+            }
+
+
+            // printf("WHY");
+            // printf("compareing %s %s\n", f->childs[i]->name, namelist[j]->d_name);
+            int res = strcmp(f->childs[i]->name, namelist[j]->d_name);
+            if (res == 0) {
+                tchild[rescnt] = f->childs[i];
+                rescnt++;
+                
+                
+                if (lstat(f->childs[i]->oripath, &statbuf) < 0) {
+                    printf("fk");
+                    return -1;
+                }
+                if (S_ISDIR(statbuf.st_mode)) { //dir
+                    if ((mod & 2) != 0) //-r exists
+                        q.push(&q, f->childs[i]);
+                    i++;
+                    j++;
+                    continue;
+                }
+                if (f->childs[i]->rear->status == 2) { //file that has same name with commited, deleted  come back here...
+                    f->childs[i]->chk = -2; //new! 
+                    filever * v = newversion();
+                    v->statbuf = statbuf;
+                    v->status = -2;
+                    v->vertime = starttime;
+                    addversion(f->childs[i], v);
+                    i++;
+                    j++;
+                    continue;
+                }
+            
+
+
+                if (statbuf.st_size != f->childs[i]->rear->statbuf.st_size) {//modified
+                    f->childs[i]->chk = 1; //mod
+                    filever * v = newversion();
+                    v->statbuf = statbuf;
+                    v->status = 1;
+                    v->vertime = starttime;
+                    addversion(f->childs[i], v);
+                    i++;
+                    j++;
+                    continue;
+                }
+                else {
+
+                    // printf("hle");
+                    char verpath[MAXPATH];
+
+                    strcpy(verpath, pidrootpath);
+                    strcat(verpath, "/");
+
+                    char relpath[MAXPATH];
+                    sprintf(relpath, "%s", substr(f->childs[i]->oripath, strlen(root->oripath) + 1, strlen(f->childs[i]->oripath)));
+                    strcat(verpath, relpath);
+                    strcat(verpath, "_");
+
+                    char mask[200];
+                    struct tm *tmt;
+                    tmt = localtime(&f->childs[i]->rear->vertime);
+                    if (strftime(mask, sizeof(mask), "%Y%m%d%H%M%S", tmt) == 0) {
+                        fprintf(stderr, "failed to make time\n");
+                        exit(3);
+                    }
+                    strcat(verpath, mask);
+
+                    int res = compare_md5(f->childs[i]->oripath, verpath);
+
+                    if (res < 0) {
+                        fprintf(stderr, "error while comparing files... md5\n");
+                        // exit(1);
+                    }
+                    if (res == 0) {
+                        //same
+                        f->childs[i]->chk = -1; 
+                        // tracked.push(&tracked, f->childs[i]); //tracked newfile
+                        i++;
+                        j++;
+                        continue;
+                        // printf("%s got no change\n", child->name);
+                    }
+                    else {
+                        f->childs[i]->chk = 1; //mod
+                        filever * v = newversion();
+                        v->statbuf = statbuf;
+                        v->status = 1;
+                        v->vertime = starttime;
+                        addversion(f->childs[i], v);
+                        i++;
+                        j++;
+                        continue;
+                    }
+                }
+            }
+            if (res < 0) { //removed staged / unstaged
+                tchild[rescnt] = f->childs[i];
+                rescnt++;
+                if (f->childs[i]->isreg == 0) { //dir that contains removed
+                    if ((mod & 2) != 0)
+                        q.push(&q, f->childs[i]);
+                    i++;
+                    continue;
+                }
+
+                if (f->childs[i]->rear->status == 2) {
+                    f->childs[i]->chk = -1; //removed long time ago and keeping its state
+                    i++;
+                    continue;
+                }
+
+                f->childs[i]->chk = 2; //removed right before.
+
+                filever * v = newversion();
+                v->status = 2;
+                v->vertime = starttime;
+                addversion(f->childs[i], v);
+
+                i++;
+                continue;
+            }
+            if (res > 0) { //new unstaged.
+                filedir * n = newfile();
+                char nextpath[MAXPATH];
+                strcpy(nextpath, f->oripath);
+                strcat(nextpath, "/");
+                strcat(nextpath, namelist[j]->d_name);
+                strcpy(n->oripath, nextpath);
+                strcpy(n->name, namelist[j]->d_name);
+                filever * v = newversion();
+
+                tchild[rescnt] = n;
+                rescnt++;
+
+                if (lstat(nextpath, &statbuf) < 0) {
+                    printf("ff");
+                    exit(1);
+                }
+                v->statbuf = statbuf;
+                v->status = -2;
+                v->vertime = starttime;
+                addversion(n, v);
+                if (S_ISREG(statbuf.st_mode)) {
+                    n->isreg = 1;
+                    n->chk = -2;
+                    j++;
+                    continue;
+                }
+                else if (S_ISDIR(statbuf.st_mode)) { //dir contains new
+                    n->isreg = 0;
+                    if ((mod & 2) != 0)
+                        q.push(&q, n);
+                    j++;
+                    continue;
+                }
+                else {
+                    printf("faa");
+                    exit(1);
+                }
+            }
+        }
+
+        //store result tchild to f->childs.
+
+        f->childs = (filedir**)realloc(f->childs, sizeof(filedir*) * rescnt);
+        f->childscnt = rescnt - 1;
+        for (int i =0 ;i < rescnt; i++) {
+            f->childs[i] = tchild[i];
+            // printf("%d ", f->childs[i]->chk);
+        }
+    }
+    // free(&q);
+    return 1;
+}
+
+queue tracked;
+/// @brief final call to store filedirs to tracked / untracked queue. initstatus() -
+/// @brief -> makeUnionofMockReal -> managelogrecurs is must to call
+/// @param mod mod 0 : for status 1 for commit
+/// @return succed
+int store2pockets(filedir * root) {
+    // queue q = *initQueue();
+    q.clear(&q);
+    q.push(&q, root);
+    //root is ignored.
+
+    while(!q.empty(&q)) {
+        filedir * cur = q.front(&q);
+        q.pop(&q);
+
+        for (int i= 0; i<= cur->childscnt; i++) {
+            filedir * child = cur->childs[i];
+            if (child->isreg == 0) { //dir
+                q.push(&q, child);
+                continue;
+            }
+            
+            if (child->chk == -1) continue;
+            tracked.push(&tracked, child);
+        }
+    }
+    // free(&q);
+    return 1;
+}
+
+void show_fs(filedir * cur, char * padding) {
+    // if (cur->childscnt == -1) { //file
+    //     printf(" file");
+    //     printf(" latest : %s\n", cur->top->version);
+    //     return;
+    // }
+    printf("%s", cur->name);
+    printf("  dir %d %p\n", cur->childscnt, cur);
+    for (int i = 0;i < cur->childscnt + 1; i++) {
+        char curpad[1000];
+        char nextpad[1000];
+        if (i == cur->childscnt) {
+            sprintf(curpad, "%s   └─", padding);
+            sprintf(nextpad, "%s    ", padding);
+        }
+        else {
+            sprintf(curpad, "%s   ├─", padding);
+            sprintf(nextpad, "%s   │ ", padding);
+        }
+        
+        if (cur->childs[i]->isreg == 1) { //file
+            printf("%s%s", curpad, cur->childs[i]->name);
+            printf(" file");
+            printf(" latest : %s %p    chk ;%d status: %d\n", ctime(&cur->childs[i]->rear->vertime)
+            , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->rear->status);
+            continue;
+        }
+        else {
+            printf("%s/", curpad);
+            show_fs(cur->childs[i], nextpad);
+        }
+        
+    }
+}
+
+void show_fs_all(filedir * cur, char * padding) {
+    // if (cur->childscnt == -1) { //file
+    //     printf(" file");
+    //     printf(" latest : %s\n", cur->top->version);
+    //     return;
+    // }
+    if (cur->isreg == 0 && cur->childscnt != -1) {
+        printf("%s", cur->name);
+        printf("  dir %p\n", cur);
+    }
+    for (int i = 0;i < cur->childscnt + 1; i++) {
+        char curpad[1000];
+        char nextpad[1000];
+        if (i == cur->childscnt) {
+            sprintf(curpad, "%s   └─", padding);
+            sprintf(nextpad, "%s    ", padding);
+        }
+        else {
+            sprintf(curpad, "%s   ├─", padding);
+            sprintf(nextpad, "%s   │ ", padding);
+        }
+        
+        if (cur->childs[i]->isreg == 1) { //file
+            printf("%s%s\n", curpad, cur->childs[i]->name);
+            // printf(" file");
+            // printf(" latest : %s %p    chk ;%d status: %d istracking : %d\n", cur->childs[i]->top->version
+            // , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->top->status, cur->childs[i]->istrack);
+            // printf("%s\n", nextpad);
+            // printf("%s versions... : \n", nextpad);
+            filever *v = cur->childs[i]->head;
+            while(v) {
+                char buf[200];
+                struct tm * tmt;
+                tmt = localtime(&v->vertime);
+                if (strftime(buf, sizeof(buf), "%C-%m-%d %T", tmt) == 0) {
+                    fprintf(stderr, "failed to make time\n");
+                    exit(3);
+                }
+                printf("%s  %s : %d\n", nextpad, buf, v->status);
+                v = v->next;
+            }
+            // printf("%s\n", nextpad);
+
+            continue;
+        }
+        else {
+            if (cur->childs[i]->childscnt == -1) continue;
+            printf("%s/", curpad);
+            show_fs_all(cur->childs[i], nextpad);
+        }
+        
+    }
 }
 
 void init_fs() {
-    
+    q = *initQueue();
+    tracked = *initQueue();
+}
+void init_pid(int pid) {
+    char temproot[4096];
+    sprintf(temproot, "%s/%d", backuppath, pid);
+    mkdir(temproot, 0777);
+    pidrootpath = substr(temproot, 0, strlen(temproot));
+    strcat(temproot, ".log");
+    pidlogpath = substr(temproot, 0, strlen(temproot));
 }
 
 void init() {
@@ -369,10 +1001,13 @@ void load_monitor_log() {
     }
     // clearmlog();
     char buf[MAXPATH * 2];
+    char line[MAXPATH * 2];
     while(1) {
-        int len = fscanf(fp, "%[^\n^\r]", buf);
-        if (len == EOF) break;
-        fgetc(fp);
+        if (fgets(line, MAXPATH * 2, fp) == NULL) break;
+        sscanf(line, "%[^\n^\r]", buf);
+        // int len = fscanf(fp, "%[^\n^\r]", buf);
+        // if (len == EOF) break;
+        // fgetc(fp);
         int res = 0;
         char ** temp = split(buf, ":", &res);
         int pid = atoi(temp[0]);
@@ -426,19 +1061,17 @@ void load_pid_log(int pid) {
         //args0 = time_t 1 = status 2 = path
     }
 }
-void save_pid_log(int pid, int status, char * tpath) {
-    char targetpath[MAXPATH];
+void save_pid_log(int pid, int status, char * tpath, char * timemask) {
     FILE * fp;
 
-    sprintf(targetpath, "%s/%d", backuppath, pid);
-    if ((fp = fopen(logpath, "a+")) == NULL) {
-        fprintf(stderr, "error on fopen");
+    if ((fp = fopen(pidlogpath, "a+")) == NULL) {
+        fprintf(stderr, "error on fopen\n");
         exit(1);
     }
     time_t t;
     time(&t);
     char * statusstr;
-    if (status == 0) {
+    if (status == -2) {
         statusstr = "create";
     }
     else if (status == 1) {
@@ -447,6 +1080,7 @@ void save_pid_log(int pid, int status, char * tpath) {
     else if (status == 2) {
         statusstr = "delete";
     } else exit(44);
-    fprintf(fp, "[%s][%d][%s]", ctime(&t), status , tpath);
+
+    fprintf(fp, "[%s][%s][%s]\n", timemask, statusstr, tpath);
     fclose(fp);
 }
