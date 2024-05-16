@@ -174,7 +174,7 @@ int rmdirs(char * path) { //danger?
     if (lstat(path, &statbuf) < 0) return -1;
     if (!S_ISDIR(statbuf.st_mode)) {
         remove(path);
-        printf("R> removing fi %s\n", path);
+        // printf("R> removing fi %s\n", path);
         return -2;
     }
     int cnt;
@@ -193,11 +193,11 @@ int rmdirs(char * path) { //danger?
         }
         else {
             remove(nextpath);
-            printf("R> removing fil %s\n", nextpath);
+            // printf("R> removing fil %s\n", nextpath);
         }
     }
     rmdir(path);
-    printf("R> removing dir %s\n", path);
+    // printf("R> removing dir %s\n", path);
     return 0;
 }
 
@@ -983,40 +983,40 @@ int store2pockets(filedir * root) {
     return 1;
 }
 
-void show_fs(filedir * cur, char * padding) {
-    // if (cur->childscnt == -1) { //file
-    //     printf(" file");
-    //     printf(" latest : %s\n", cur->top->version);
-    //     return;
-    // }
-    printf("%s", cur->name);
-    printf("  dir %d %p\n", cur->childscnt, cur);
-    for (int i = 0;i < cur->childscnt + 1; i++) {
-        char curpad[1000];
-        char nextpad[1000];
-        if (i == cur->childscnt) {
-            sprintf(curpad, "%s   └─", padding);
-            sprintf(nextpad, "%s    ", padding);
-        }
-        else {
-            sprintf(curpad, "%s   ├─", padding);
-            sprintf(nextpad, "%s   │ ", padding);
-        }
+// void show_fs(filedir * cur, char * padding) {
+//     // if (cur->childscnt == -1) { //file
+//     //     printf(" file");
+//     //     printf(" latest : %s\n", cur->top->version);
+//     //     return;
+//     // }
+//     printf("%s", cur->name);
+//     printf("  dir %d %p\n", cur->childscnt, cur);
+//     for (int i = 0;i < cur->childscnt + 1; i++) {
+//         char curpad[1000];
+//         char nextpad[1000];
+//         if (i == cur->childscnt) {
+//             sprintf(curpad, "%s   └─", padding);
+//             sprintf(nextpad, "%s    ", padding);
+//         }
+//         else {
+//             sprintf(curpad, "%s   ├─", padding);
+//             sprintf(nextpad, "%s   │ ", padding);
+//         }
         
-        if (cur->childs[i]->isreg == 1) { //file
-            printf("%s%s", curpad, cur->childs[i]->name);
-            printf(" file");
-            printf(" latest : %s %p    chk ;%d status: %d\n", ctime(&cur->childs[i]->rear->vertime)
-            , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->rear->status);
-            continue;
-        }
-        else {
-            printf("%s/", curpad);
-            show_fs(cur->childs[i], nextpad);
-        }
+//         if (cur->childs[i]->isreg == 1) { //file
+//             printf("%s%s", curpad, cur->childs[i]->name);
+//             printf(" file");
+//             printf(" latest : %s %p    chk ;%d status: %d\n", ctime(&cur->childs[i]->rear->vertime)
+//             , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->rear->status);
+//             continue;
+//         }
+//         else {
+//             printf("%s/", curpad);
+//             show_fs(cur->childs[i], nextpad);
+//         }
         
-    }
-}
+//     }
+// }
 
 void show_fs_all_mod(filedir * cur, char * padding, int first) {
     if (cur->isreg == 1) { //file
@@ -1040,7 +1040,7 @@ void show_fs_all_mod(filedir * cur, char * padding, int first) {
                 fprintf(stderr, "failed to make time\n");
                 exit(3);
             }
-            printf("%s  %s : %d\n", lastpad, buf, v->status);
+            printf("%s  %s : %d %ld\n", lastpad, buf, v->status, v->vertime);
             v = v->next;
         }
         return;
@@ -1185,17 +1185,13 @@ void load_pid_log(filedir * root, int pid) { ///for list
         if(!strcmp(argv[1], "modify")) v->status = 1;
         if(!strcmp(argv[1], "delete")) v->status = 2;
 
-        struct tm tmt;
-
+        struct tm tmt = {0};
         if (strptime(argv[0], "%Y-%m-%d %T", &tmt) == NULL) {
             fprintf(stderr, "log file corrupted, time\n");
             exit(100);
         }
         v->vertime = mktime(&tmt);
-        /**
-         * TODO: strptime...
-        */
-        // v->vertime = 
+
         addversion(f, v);
         addfiledir(root, f);
         for (int i =0 ;i < res; i++) {

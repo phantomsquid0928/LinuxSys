@@ -131,7 +131,7 @@ void addfunc(int argc, char * argv[]) {
     int mod = 0;
     extern char *optarg;
     extern int optind;
-    int period = 1; //default period
+    int period = 1; //default period 1sec
 
     optind = 0; //important!
 
@@ -207,7 +207,6 @@ void addfunc(int argc, char * argv[]) {
     }
 
     /**
-     * TODO: opt manage. DONE
      * TODO: dup manage 
     */
 
@@ -268,9 +267,6 @@ void removefunc(int argc, char * argv[]) {
         fprintf(stderr, "failed to remove pid as pid is invalid\n");
         return;
     }
-    /**
-     * TODO: KILL PROCESS PID
-    */
    //
     save_monitor_log();
 
@@ -311,12 +307,6 @@ void listfunc(int argc, char * argv[]) {
         return;
     }
     else {
-        /**
-         * TODO: search pid from mlog and get root
-         * TODO: if not exists then err or continue
-         * TODO: from root make fs?
-         * TODO: then showfs will be clear as pid folder is dirty.
-        */
         init_pid(pid);
         init_fs();
 
@@ -350,18 +340,8 @@ void listfunc(int argc, char * argv[]) {
         load_pid_log(root, pid);
 
         show_fs_all_mod(root, "", 1);
-        // q.clear(&q);
-        // while(!q.empty(&q)) {
-        //     filedir * f = q.front(&q);
-        //     q.pop(&q);
-        //     for (int i = 0;i <= f->childscnt; i++) {}
-        // }
         free(root);
     }
-
-    //tree
-
-
 }
 void helpfunc(int argc, char * argv[]) {
     if (argc == 2) {
