@@ -262,7 +262,7 @@ typedef struct monitorlist{
 typedef struct filever{
     time_t vertime;
     int status; //-2 added -1: existing    1 mod 2 removed   indicates action on that version of commit.
-    char path[MAXPATH];
+    // char path[MAXPATH];
     struct stat statbuf;
     struct filever * next;
 }filever;
@@ -444,13 +444,14 @@ void addversion(filedir * f, filever * t) {
 
 
 
-filedir * newfile() {
+filedir * newfile() { //default creation is dir.
     filedir * temp = (filedir*)malloc(sizeof(filedir));
     temp->head = NULL;
     temp->rear = NULL;
     temp->childs = NULL;
     temp->childscnt = -1;
     temp->chk = -1; //not target
+    temp->isreg = 0;
     return temp;
 }
 filever * newversion() {
@@ -460,14 +461,128 @@ filever * newversion() {
     return temp;
 }
 
-/**
- * TODO: need root -> path handle
-*/
+filedir * addfiledir(filedir * root, filedir * target) { //filedir always comes file, root also can be file when root was tracking file
+    // printf("called");
+    filedir * temp = root;
+    if (!strcmp(root->oripath, target->oripath)) { //must be both file.
+        root->isreg = 1;
+        addversion(root, target->head);
+        free(target);
+        return NULL;
+    }
+    char * relpath = substr(target->oripath, strlen(temp->oripath) + 1, strlen(target->oripath));
+
+    // printf("%s\n", relpath);
+    int res;
+    char ** args = split(relpath, "/", &res);
+    // if (!strcmp(target->oripath, temp->oripath)) { // root is ontrack ????
+    //     free(target);
+    //     return temp;
+    // }
+    
+    char curpath[MAXPATH];
+    strcpy(curpath, temp->oripath); //root
+    for(int i= 0;i < res; i++) {
+        // printf("cur : %s\n", temp->oripath);
+        strcat(curpath, "/");
+        strcat(curpath, args[i]);
+        // printf("path: %s\n", curpath);
+        if (temp->childscnt != -1) {
+            // for (int j = 0; j < temp->childscnt + 1; j++) {
+            //     printf("member : %s\n", temp->childs[j]->name);
+            // }
+            // printf("\n");
+            int start = 0;
+            int end = temp->childscnt + 1;
+            int chk = 0;
+            for (int j = 0; j < 30; j++) { //can handle 2 ^ 30filedirs in same dir, may cause err
+                int mid = start + end >> 1;
+                int res = strcmp(temp->childs[mid]->name, args[i]);
+                // printf("res : %d %d %d, %s  :  %s\n",res, start, end, temp->childs[mid]->name, args[i]);
+                if (res == 0) { //there is same one, found real quick
+                    chk = 1;
+                    break;
+                }
+                if (res > 0) {
+                    end = mid;
+                }
+                else {
+                    start = mid;
+                }
+            }
+            if (chk == 1) { 
+                int mid = start + end >> 1;
+                //same, dir or file exists
+                // printf("exists!\n");
+                if (i == res - 1) { //file
+                    // printf("same file!");
+                    addversion(temp->childs[mid], target->rear);
+                    free(target);
+                    return temp->childs[mid];
+                }
+                else { //dir
+                    temp = temp->childs[mid];
+                }
+                
+            }
+            else { //file or dir not exists
+                // printf("here, %d %d", temp->childscnt, end);
+                temp->childs = (filedir **)realloc(temp->childs, sizeof(filedir*) * (temp->childscnt + 2));// 3-> 4ro  5
+
+                for (int j = temp->childscnt; j >= end; j--) {
+                    temp->childs[j + 1] = temp->childs[j];
+                }
+                if (i == res - 1) //no file, adding...
+                {
+                    // if (mod == 0) {//from commit
+                    temp->childs[end] = target;
+                    temp->childscnt++;
+                    // printf("res\n");
+                    return target;
+                }
+                else { //no dir...
+                    // printf("seeking\n");
+                    filedir * newfiledir = newfile();
+                    newfiledir->isreg = 0;
+                    strcpy(newfiledir->name, args[i]);
+                    strcpy(newfiledir->oripath, curpath);
+                    temp->childs[end] = newfiledir;
+                    temp->childscnt++;
+                    temp = temp->childs[end];
+                }
+                
+            }
+        }
+        else { //cur dir has no child
+            if (i == res - 1) {// file {
+                // printf("adding bare file\n\n");
+                temp->childs = (filedir**)malloc(sizeof(filedir*));
+                temp->childs[0] = target;
+                
+                temp->childscnt = 0;
+                return target;
+            }
+            else { // not yet, keep adding empty dir
+                // printf("adding new dir\n");
+                temp->childs = (filedir**)malloc(sizeof(filedir*));
+                filedir * newfiledir = newfile();
+                newfiledir->isreg = 0;
+                strcpy(newfiledir->name, args[i]);
+                strcpy(newfiledir->oripath, curpath);
+                temp->childs[0] = newfiledir;
+    
+                temp->childscnt = 0;
+                temp = temp->childs[0];
+            }
+        }
+    }
+
+}
 
 /// @brief 
-/// @param root must be dir
+/// @param root file or dir
 /// @param starttime 
-/// @param mod 0 then targetpath is filepath 1 then dirpath
+/// @param mod 0 then targetpath is filepath 1 or 2 then dirpath
 /// @param targetpath 
 /// @return 
 int makeUnionofMockReal(filedir * root, time_t starttime, int mod, char * targetpath) { 
@@ -475,98 +590,85 @@ int makeUnionofMockReal(filedir * root, time_t starttime, int mod, char * target
     struct dirent ** namelist;
     int cnt;
 
-    if (mod == 0) {
-        if (root->childscnt == -1) {
-            if (lstat(targetpath, &statbuf) < 0) {
-                fprintf(stderr, "trying to track phantomfile?\n");
-                exit(2);
-            }
-            root->childs = malloc(sizeof(char *));
-            filedir * f = newfile();
-            filever * v = newversion();
-            char fname[MAXDIR];
-            sprintf(fname, "%s", substr(targetpath, return_last_name(targetpath) + 1, strlen(targetpath)));
-            strcpy(f->name, fname);
-            strcpy(f->oripath, targetpath);
-            f->isreg = 1;
-            f->chk = -2;
-
-            v->vertime = starttime;
-            v->statbuf = statbuf;
+    if ((mod & 3) == 0) {
+        root->isreg = 1;
+        filever * v = newversion();
+        if (root->rear == NULL) {
+            root->chk = -2;
             v->status = -2;
-            
-            addversion(f, v);
-            root->childs[0] = f;
-            root->childscnt = 0;
-        }
-        else {
-            filedir * target = root->childs[0];
-            filever * v = newversion();
-            if (access(target->oripath, F_OK)) {
-                if (target->rear->status == 2) {
-                    return 1;
-                }
-                target->chk = 2;
-                v->status = 2;
-                v->vertime = starttime;
-                addversion(target, v);
-
-                return 1;
-            }
-            if (lstat(target->oripath, &statbuf) < 0) {
+            v->vertime = starttime;
+            if (lstat(root->oripath, &statbuf) < 0) {
                 fprintf(stderr, "lstat error, have no permission?\n");
                 exit(2);
             }
-            if (target->rear->statbuf.st_size != statbuf.st_size) {
-                target->chk = 1;
+            v->statbuf = statbuf;
+            addversion(root, v);
+            
+            return 1;
+        }
+        if (access(root->oripath, F_OK)) {
+            if (root->rear->status == 2) {
+                return 1;
+            }
+            root->chk = 2;
+            v->status = 2;
+            v->vertime = starttime;
+            addversion(root, v);
+
+            return 1;
+        }
+        if (lstat(root->oripath, &statbuf) < 0) {
+            fprintf(stderr, "lstat error, have no permission?\n");
+            exit(2);
+        }
+        if (root->rear->statbuf.st_size != statbuf.st_size) {
+            root->chk = 1;
+            v->statbuf = statbuf;
+            v->status = 1;
+            v->vertime = starttime;
+            addversion(root, v);
+            return 1;
+        }
+        else {
+            char verpath[MAXPATH];
+            
+            strcpy(verpath, pidrootpath);
+            strcat(verpath, "/");
+
+            char relpath[MAXPATH];
+            strcat(verpath, substr(root->oripath, return_last_name(root->oripath) + 1, strlen(root->oripath)));
+            strcat(verpath, "_");
+
+            char mask[200];
+            struct tm *tmt;
+            tmt = localtime(&root->rear->vertime);
+            if (strftime(mask, sizeof(mask), "%Y%m%d%H%M%S", tmt) == 0) {
+                fprintf(stderr, "failed to make time\n");
+                exit(3);
+            }
+            strcat(verpath, mask);
+
+            int res = compare_md5(root->oripath, verpath);
+
+            if (res < 0) {
+                fprintf(stderr, "error while comparing files... md5\n");
+                // exit(1);ddd
+            }
+            if (res == 0) {
+                //same
+                root->chk = -1; 
+                // tracked.push(&tracked, f->childs[i]); //tracked newfil
+                return 1;
+                // printf("%s got no change\n", child->name);
+            }
+            else {
+                root->chk = 1; //mod
+                filever * v = newversion();
                 v->statbuf = statbuf;
                 v->status = 1;
                 v->vertime = starttime;
-                addversion(target, v);
+                addversion(root, v);
                 return 1;
-            }
-            else {
-                char verpath[MAXPATH];
-                
-                strcpy(verpath, pidrootpath);
-                strcat(verpath, "/");
-
-                char relpath[MAXPATH];
-                sprintf(relpath, "%s", substr(target->oripath, strlen(root->oripath) + 1, strlen(target->oripath)));
-                strcat(verpath, relpath);
-                strcat(verpath, "_");
-
-                char mask[200];
-                struct tm *tmt;
-                tmt = localtime(&target->rear->vertime);
-                if (strftime(mask, sizeof(mask), "%Y%m%d%H%M%S", tmt) == 0) {
-                    fprintf(stderr, "failed to make time\n");
-                    exit(3);
-                }
-                strcat(verpath, mask);
-
-                int res = compare_md5(target->oripath, verpath);
-
-                if (res < 0) {
-                    fprintf(stderr, "error while comparing files... md5\n");
-                    // exit(1);ddd
-                }
-                if (res == 0) {
-                    //same
-                    target->chk = -1; 
-                    // tracked.push(&tracked, f->childs[i]); //tracked newfil
-                    return 1;
-                    // printf("%s got no change\n", child->name);
-                }
-                else {
-                    target->chk = 1; //mod
-                    filever * v = newversion();
-                    v->statbuf = statbuf;
-                    v->status = 1;
-                    v->vertime = starttime;
-                    addversion(target, v);
-                    return 1;
-                }
             }
         }
         return 1;
@@ -846,16 +948,21 @@ int makeUnionofMockReal(filedir * root, time_t starttime, int mod, char * target
     return 1;
 }
 
-queue tracked;
 /// @brief final call to store filedirs to tracked / untracked queue. initstatus() -
 /// @brief -> makeUnionofMockReal -> managelogrecurs is must to call
 /// @param mod mod 0 : for status 1 for commit
 /// @return succed
 int store2pockets(filedir * root) {
     // queue q = *initQueue();
+    
+    if (root->isreg == 1){
+        if(root->chk != -1) 
+            tracked.push(&tracked, root);
+        return 1;
+    }
+    //root is ignored.
     q.clear(&q);
     q.push(&q, root);
-    //root is ignored.
 
     while(!q.empty(&q)) {
         filedir * cur = q.front(&q);
@@ -911,22 +1018,44 @@ void show_fs(filedir * cur, char * padding) {
     }
 }
 
-void show_fs_all(filedir * cur, char * padding) {
-    // if (cur->childscnt == -1) { //file
-    //     printf(" file");
-    //     printf(" latest : %s\n", cur->top->version);
-    //     return;
-    // }
+void show_fs_all_mod(filedir * cur, char * padding, int first) {
+    if (cur->isreg == 1) { //file
+        if (first == 1) printf("%s\n", cur->oripath);
+        else printf("%s\n", cur->name);
+        // printf(" file");
+        // printf(" latest : %s\n", cur->rear-);
+        filever * v = cur->head;
+        while(v) {
+            char lastpad[1000];
+            if (v->next == NULL) {
+                sprintf(lastpad, "%s   └─", padding);
+            }
+            else {
+                sprintf(lastpad, "%s   ├─", padding);
+            }
+            char buf[200];
+            struct tm * tmt;
+            tmt = localtime(&v->vertime);
+            if (strftime(buf, sizeof(buf), "%Y-%m-%d %T", tmt) == 0) {
+                fprintf(stderr, "failed to make time\n");
+                exit(3);
+            }
+            printf("%s  %s : %d\n", lastpad, buf, v->status);
+            v = v->next;
+        }
+        return;
+    }
     if (cur->isreg == 0 && cur->childscnt != -1) {
-        printf("%s", cur->name);
-        printf("  dir %p\n", cur);
+        if (first == 1) printf("%s\n", cur->oripath);
+        else printf("%s\n", cur->name);
+        // printf("  dir\n");
     }
     for (int i = 0;i < cur->childscnt + 1; i++) {
         char curpad[1000];
         char nextpad[1000];
         if (i == cur->childscnt) {
             sprintf(curpad, "%s   └─", padding);
-            sprintf(nextpad, "%s    ", padding);
+            sprintf(nextpad, "%s     ", padding);
         }
         else {
             sprintf(curpad, "%s   ├─", padding);
@@ -934,34 +1063,13 @@ void show_fs_all(filedir * cur, char * padding) {
         }
         
         if (cur->childs[i]->isreg == 1) { //file
-            printf("%s%s\n", curpad, cur->childs[i]->name);
-            // printf(" file");
-            // printf(" latest : %s %p    chk ;%d status: %d istracking : %d\n", cur->childs[i]->top->version
-            // , cur->childs[i], cur->childs[i]->chk, cur->childs[i]->top->status, cur->childs[i]->istrack);
-            // printf("%s\n", nextpad);
-            // printf("%s versions... : \n", nextpad);
-            filever *v = cur->childs[i]->head;
-            while(v) {
-                char buf[200];
-                struct tm * tmt;
-                tmt = localtime(&v->vertime);
-                if (strftime(buf, sizeof(buf), "%C-%m-%d %T", tmt) == 0) {
-                    fprintf(stderr, "failed to make time\n");
-                    exit(3);
-                }
-                printf("%s  %s : %d\n", nextpad, buf, v->status);
-                v = v->next;
-            }
-            // printf("%s\n", nextpad);
-
-            continue;
+            printf("%s", curpad);
         }
         else {
             if (cur->childs[i]->childscnt == -1) continue;
             printf("%s/", curpad);
-            show_fs_all(cur->childs[i], nextpad);
         }
-        
+        show_fs_all_mod(cur->childs[i], nextpad, 0); 
     }
 }
 
@@ -972,9 +1080,11 @@ void init_fs() {
 void init_pid(int pid) {
     char temproot[4096];
     sprintf(temproot, "%s/%d", backuppath, pid);
-    mkdir(temproot, 0777);
+    if (access(temproot, F_OK)) mkdir(temproot, 0777);
+    pidrootpath = NULL;
     pidrootpath = substr(temproot, 0, strlen(temproot));
     strcat(temproot, ".log");
+    pidlogpath = NULL;
     pidlogpath = substr(temproot, 0, strlen(temproot));
 }
 
@@ -988,8 +1098,11 @@ void init() {
     if (access(backuppath, F_OK)) mkdir(backuppath, 0777);
 
     sprintf(logpath, "%s/%s", backuppath, "monitor_list.log");
+
+    int fd;
     if (access(logpath, F_OK)) {
-        if (open(logpath, O_CREAT, 0777) < 0) fprintf(stderr, "creat error");
+        if ((fd = open(logpath, O_CREAT, 0777)) < 0) fprintf(stderr, "creat error");
+        close(fd);
     }
 }
 
@@ -1043,25 +1156,55 @@ void save_monitor_log() { //truncate
 
     fclose(fp);
 }
-void load_pid_log(int pid) {
+void load_pid_log(filedir * root, int pid) { ///for list
     char targetpath[MAXPATH];
     FILE * fp;
 
-    sprintf(targetpath, "%s/%d", backuppath, pid);
-    if ((fp = fopen(logpath, "r")) == NULL) {
+    sprintf(targetpath, "%s/%d.log", backuppath, pid);
+    if ((fp = fopen(targetpath, "r")) == NULL) {
         fprintf(stderr, "error on fopen");
         exit(1);
     }
     char buf[MAXPATH * 2];
     while(1) {
+        memset(buf, 0, sizeof(buf));
         int len = fscanf(fp, "%[^\n^\r]", buf);
         if (len == EOF) break;
+        fgetc(fp);
         int res = 0;
-        char ** args = split(buf, "[]", &res);
+
+        char ** argv = split(buf, "[]", &res);
         //args0 = time_t 1 = status 2 = path
+        filedir * f = newfile();
+        filever * v = newversion();
+        char * name = substr(argv[2], return_last_name(argv[2]) + 1, strlen(argv[2]));
+        strcpy(f->oripath, argv[2]);
+        strcpy(f->name, name);
+        f->isreg = 1;
+        if(!strcmp(argv[1], "create")) v->status = -2;
+        if(!strcmp(argv[1], "modify")) v->status = 1;
+        if(!strcmp(argv[1], "delete")) v->status = 2;
+
+        struct tm tmt;
+
+        if (strptime(argv[0], "%Y-%m-%d %T", &tmt) == NULL) {
+            fprintf(stderr, "log file corrupted, time\n");
+            exit(100);
+        }
+        v->vertime = mktime(&tmt);
+        /**
+         * TODO: strptime...
+        */
+        // v->vertime = 
+        addversion(f, v);
+        addfiledir(root, f);
+        for (int i =0 ;i < res; i++) {
+            free(argv[i]);
+        }
     }
+    fclose(fp);
 }
-void save_pid_log(int pid, int status, char * tpath, char * timemask) {
+void save_pid_log(int pid, int status, char * tpath, char * timemask) { //for pid daemon
     FILE * fp;
 
     if ((fp = fopen(pidlogpath, "a+")) == NULL) {

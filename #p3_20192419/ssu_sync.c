@@ -1,7 +1,7 @@
 #include "phantomutils.h"
 
 int cnt = 3;
-void modify_checker(int pid, filedir * root, char * timemask) { //1초 내에 끝나야 함????
+void modify_checker(int pid, filedir * root, time_t t) { //1초 내에 끝나야 함????
     if (tracked.empty(&tracked)) return;
     while(!tracked.empty(&tracked)) {
         filedir * f = tracked.front(&tracked);
@@ -12,7 +12,22 @@ void modify_checker(int pid, filedir * root, char * timemask) { //1초 내에 �
         char curpath[MAXPATH];
         // char relpath[MAXPATH];
 
-        char * relpath =  substr(f->oripath, strlen(root->oripath) + 1, strlen(f->oripath));
+        char * relpath;
+        if (root->isreg == 0) relpath = substr(f->oripath, strlen(root->oripath) + 1, strlen(f->oripath));
+        else {
+            relpath = substr(f->oripath, return_last_name(f->oripath) + 1, strlen(f->oripath));
+        }
+        /**
+         * WAL?
+        */
+        struct tm* tmt;
+        tmt = localtime(&t);
+        char timemask[200];
+        if (strftime(timemask, sizeof(timemask), "%Y-%m-%d %T", tmt) == 0) {
+            fprintf(stderr, "failed to make time\n");
+            exit(3);
+        }
+        save_pid_log(pid, f->chk, f->oripath, timemask);
 
         if (f->chk != 2) {
 
@@ -23,6 +38,14 @@ void modify_checker(int pid, filedir * root, char * timemask) { //1초 내에 �
                 close(commitfd);
                 close(originfd);
                 exit(1);
+            }
+
+            struct tm* tmt;
+            tmt = localtime(&t);
+            char timemask[200];
+            if (strftime(timemask, sizeof(timemask), "%Y%m%d%H%M%S", tmt) == 0) {
+                fprintf(stderr, "failed to make time\n");
+                exit(3);
             }
             
             sprintf(curpath, "%s/%s_%s", pidrootpath, relpath, timemask);
@@ -69,7 +92,7 @@ void modify_checker(int pid, filedir * root, char * timemask) { //1초 내에 �
          * TODOOLD: save_commit_log queue, flush 형태로 바꾸기?
          * i dunt know wal :P
         */
-        save_pid_log(pid, f->chk, f->oripath, timemask);
+
     }
 }
 static void killer() {
@@ -83,11 +106,6 @@ int make_daemon() {
         return -1;
     }
     else if (pid != 0) return pid;
-    // if ((pid = fork()) < 0) {
-    //     fprintf(stderr, "fork error\n");
-    //     return -1;
-    // }
-    // else if (pid != 0) exit(0);
 
     pid = getpid();
 
@@ -96,10 +114,10 @@ int make_daemon() {
     signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
     signal(SIGTSTP, SIG_IGN);
-    // maxfd = getdtablesize();
+    maxfd = getdtablesize();
 
-    // for (fd = 0; fd < maxfd; fd++) 
-    //     close(fd);
+    for (fd = 0; fd < maxfd; fd++) 
+        close(fd);
     
     umask(0);
     chdir("/");
@@ -188,15 +206,6 @@ void addfunc(int argc, char * argv[]) {
         return;
     }
 
-    char * rootpath;
-    if (S_ISDIR(statbuf.st_mode)) {
-        rootpath = path;
-    }
-    else {
-        rootpath = substr(path, 0, return_last_name(path));
-    }
-
-    
     /**
      * TODO: opt manage. DONE
      * TODO: dup manage 
@@ -212,29 +221,24 @@ void addfunc(int argc, char * argv[]) {
         signal(SIGUSR1, killer);
         int daemon_pid = getpid();
         filedir * root = newfile();
-        strcpy(root->oripath, rootpath);
+        strcpy(root->name, substr(path, return_last_name(path) + 1, strlen(path)));
+        strcpy(root->oripath, path);
+        // sleep(10);
         init_pid(daemon_pid);
-        sleep(10);
         init_fs();
         // execlp("./a.out", )
         // int t = 0;
         while(1) {
             time_t t;
             time(&t);
-            struct tm* tmt;
-            tmt = localtime(&t);
-            char timemask[200];
-            if (strftime(timemask, sizeof(timemask), "%Y%m%d%H%M%S", tmt) == 0) {
-                fprintf(stderr, "failed to make time\n");
-                exit(3);
-            }
+        
             makeUnionofMockReal(root, t, mod, path);
             // printf("fff");
             store2pockets(root);
-            modify_checker(daemon_pid, root, timemask);
+            modify_checker(daemon_pid, root, t);
 
-            show_fs_all(root, "");
-            sleep(10);
+            // show_fs_all(root, "");
+            sleep(period);
         }
         exit(0); //wIERD
     }
@@ -313,6 +317,9 @@ void listfunc(int argc, char * argv[]) {
          * TODO: from root make fs?
          * TODO: then showfs will be clear as pid folder is dirty.
         */
+        init_pid(pid);
+        init_fs();
+
         monitorlist * temp = head;
         while(temp) {
             if (temp->pid == pid) {
@@ -330,11 +337,28 @@ void listfunc(int argc, char * argv[]) {
             fprintf(stderr, "backup file corrupted");
             exit(10);
         }
-        
 
+        filedir * root = NULL;
+        root = newfile();
+        strcpy(root->oripath, temp->path); 
+        strcpy(root->name, substr(temp->path, return_last_name(temp->path) + 1, strlen(temp->path)));
+        /**
+         * TODO: FATAL: what if temp->path is fucking filepath, it will cause huge error.
+         * FATAL: how can we know if log path is file or dir/?
+         * SOLVED:
+        */
+        load_pid_log(root, pid);
 
+        show_fs_all_mod(root, "", 1);
+        // q.clear(&q);
+        // while(!q.empty(&q)) {
+        //     filedir * f = q.front(&q);
+        //     q.pop(&q);
+        //     for (int i = 0;i <= f->childscnt; i++) {}
+        // }
+        free(root);
     }
-    
+
     //tree
 
 
@@ -382,9 +406,9 @@ int main(void) {
         int res = 0;
         int valid = 1;
         char ** args = commandsplit(input, " ", &res, &valid);
-        for (int i =0 ;i < res; i++) {
-            printf("input %d : %s \n", i, args[i]);
-        }
+        // for (int i =0 ;i < res; i++) {
+        //     printf("input %d : %s \n", i, args[i]);
+        // }
         if (res == 0) continue;
         if (valid != 0) {
             int chk = 0;
