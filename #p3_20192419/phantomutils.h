@@ -807,7 +807,9 @@ int makeUnionofMockReal(filedir * root, time_t starttime, int mod, char * target
             
 
 
-                if (statbuf.st_size != f->childs[i]->rear->statbuf.st_size) {//modified
+                if (statbuf.st_size != f->childs[i]->rear->statbuf.st_size
+                 || statbuf.st_mtime != f->childs[i]->rear->statbuf.st_mtime
+                  || statbuf.st_ctime != f->childs[i]->rear->statbuf.st_ctime) {//modified
                     f->childs[i]->chk = 1; //mod
                     filever * v = newversion();
                     v->statbuf = statbuf;
@@ -1040,7 +1042,12 @@ void show_fs_all_mod(filedir * cur, char * padding, int first) {
                 fprintf(stderr, "failed to make time\n");
                 exit(3);
             }
-            printf("%s  %s : %d %ld\n", lastpad, buf, v->status, v->vertime);
+            char * statusstr;
+            if (v->status == -2) statusstr = "create";
+            if (v->status == 1) statusstr = "modify";
+            if (v->status == 2) statusstr = "remove";
+    
+            printf("%s[%s] [%s]\n", lastpad, statusstr, buf);
             v = v->next;
         }
         return;
@@ -1049,6 +1056,9 @@ void show_fs_all_mod(filedir * cur, char * padding, int first) {
         if (first == 1) printf("%s\n", cur->oripath);
         else printf("%s\n", cur->name);
         // printf("  dir\n");
+    }
+    if (cur->isreg == 0 && first == 1 && cur->childscnt == -1) {
+        printf("%s is empty dir now\n", cur->oripath);
     }
     for (int i = 0;i < cur->childscnt + 1; i++) {
         char curpad[1000];
@@ -1077,10 +1087,10 @@ void init_fs() {
     q = *initQueue();
     tracked = *initQueue();
 }
-void init_pid(int pid) {
+void init_pid(int pid, int mod) {
     char temproot[4096];
     sprintf(temproot, "%s/%d", backuppath, pid);
-    if (access(temproot, F_OK)) mkdir(temproot, 0777);
+    if (access(temproot, F_OK) && mod == 1) mkdir(temproot, 0777);
     pidrootpath = NULL;
     pidrootpath = substr(temproot, 0, strlen(temproot));
     strcat(temproot, ".log");
@@ -1131,7 +1141,7 @@ void load_monitor_log() {
         strcpy(log->path, targetpath);
         pushmlog(log);
 
-        printf("%d %s\n", pid, targetpath);
+        // printf("%d %s\n", pid, targetpath);
 
         free(targetpath);
         free(temp[0]);
@@ -1183,7 +1193,7 @@ void load_pid_log(filedir * root, int pid) { ///for list
         f->isreg = 1;
         if(!strcmp(argv[1], "create")) v->status = -2;
         if(!strcmp(argv[1], "modify")) v->status = 1;
-        if(!strcmp(argv[1], "delete")) v->status = 2;
+        if(!strcmp(argv[1], "remove")) v->status = 2;
 
         struct tm tmt = {0};
         if (strptime(argv[0], "%Y-%m-%d %T", &tmt) == NULL) {
@@ -1217,7 +1227,7 @@ void save_pid_log(int pid, int status, char * tpath, char * timemask) { //for pi
         statusstr = "modify";
     }
     else if (status == 2) {
-        statusstr = "delete";
+        statusstr = "remove";
     } else exit(44);
 
     fprintf(fp, "[%s][%s][%s]\n", timemask, statusstr, tpath);

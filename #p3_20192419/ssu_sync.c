@@ -109,7 +109,7 @@ int make_daemon() {
 
     pid = getpid();
 
-    printf("%d is daemon\n", pid);
+    // printf("%d is daemon\n", pid);
     setsid();
     signal(SIGTTIN, SIG_IGN);
     signal(SIGTTOU, SIG_IGN);
@@ -133,7 +133,7 @@ void addfunc(int argc, char * argv[]) {
     extern int optind;
     int period = 1; //default period 1sec
 
-    optind = 0; //important!
+    optind = 0; //important!ddd
 
     if (argc == 1) {
         //err
@@ -141,18 +141,45 @@ void addfunc(int argc, char * argv[]) {
         return;
     }
     if (strlen(argv[1]) > MAXPATH) { //BADpath
-        printf("bad path");
+        printf("bad path\n");
         return;
     }
     char path[MAXPATH];
+
+    int len = strlen(argv[1]);
+    int tt = 0;
+    for (int i =0; i< len; i++) { //remove ' and " from path if exists
+        int chk = 0;
+        if (argv[1][i + tt] == '\'') chk = 1;
+        else if (argv[1][i + tt] == '"') chk = 1;
+        if (chk == 1) tt++;
+        argv[1][i] = argv[1][i + tt];
+    }
+    // printf("%d ", len);
+    // printf("%s\n", argv[1]);
     char * temp = realpath(argv[1], NULL);
     if (temp == NULL) { //badpath2
-        printf("bad path");
+        printf("bad path\n");
+        return;
+    }
+    char * ptr = strstr(temp, homepath);
+    char * ptr2 = strstr(temp, backuppath);
+    if (ptr == NULL || ptr2 != NULL || !strcmp(temp, homepath)) { //홈디렉토리 는 backup을 포함하기에 strcmp로 제외, home/ph없으면 홈 디렉토리보다 상위이므로 제외, backup하위 제외
+        printf("bad path\n");
         return;
     }
     strcpy(path, temp);
+
+    monitorlist * t = head;
+    while(t) {
+        if (!strcmp(t->path, path)) {
+            printf("daemon already exists managing this path!\n");
+            return;
+        }
+        t = t->next;
+    }
     
-    printf("path : %s\n", path);
+    // printf("path : %s\n", path);
     while((c = getopt(argc, argv, "drt:")) != -1) {
         switch(c) {
             case 'd':
@@ -165,7 +192,7 @@ void addfunc(int argc, char * argv[]) {
                 mod |= 4;
                 for (int i= 0; i < strlen(optarg); i++) {
                     if (isdigit(optarg[i]) == 0) {
-                        printf("bad arg of -t");
+                        printf("bad arg of -t\n");
                         addhelp();
                         //not good
                         // printf("eeee");
@@ -223,8 +250,14 @@ void addfunc(int argc, char * argv[]) {
         strcpy(root->name, substr(path, return_last_name(path) + 1, strlen(path)));
         strcpy(root->oripath, path);
         // sleep(10);
-        init_pid(daemon_pid);
+        init_pid(daemon_pid, 1);
         init_fs();
+        int fd;
+        if ((fd = open(pidlogpath, O_CREAT | O_RDWR, 0777)) < 0) {
+            fprintf(stderr, "file creation error\n");
+            exit(1);
+        }
+        close(fd);
         // execlp("./a.out", )
         // int t = 0;
         while(1) {
@@ -246,7 +279,8 @@ void addfunc(int argc, char * argv[]) {
         strcpy(newmon->path, path);
         pushmlog(newmon);
         save_monitor_log();
-        printf("path : %s\t mod : %d %d\n", path, mod, period);
+        printf("monitoring started (%s) : %d\n", path, pid);
+        // printf("path : %s\t mod : %d %d\n", path, mod, period);
         return;
     }
 }   
@@ -263,6 +297,14 @@ void removefunc(int argc, char * argv[]) {
     }
     int pid = atoi(argv[1]);
 
+    monitorlist * temp = head;
+    while(temp) {
+        if (temp->pid == pid) break;
+        temp = temp->next;
+    }
+    char rmpath[MAXPATH];
+    strcpy(rmpath, temp->path);
+
     if (removemlog(pid) < 0) {
         fprintf(stderr, "failed to remove pid as pid is invalid\n");
         return;
@@ -278,6 +320,8 @@ void removefunc(int argc, char * argv[]) {
     sprintf(targetlogpath, "%s/%d.log", backuppath, pid);
     rmdirs(targetpath);
     remove(targetlogpath);
+
+    printf("monitoring ended (%s) : %d\n", rmpath, pid);
 
     //remove pid(kill) from process, list, files
 }
@@ -300,6 +344,9 @@ void listfunc(int argc, char * argv[]) {
     if (pid == -1) {
         //showmlog
         monitorlist * temp = head;
+        if (temp == NULL) {
+            printf("no tasks\n");
+        }
         while(temp) {
             printf("%d : %s\n", temp->pid, temp->path);
             temp = temp->next;
@@ -307,7 +354,7 @@ void listfunc(int argc, char * argv[]) {
         return;
     }
     else {
-        init_pid(pid);
+        init_pid(pid, 0);
         init_fs();
 
         monitorlist * temp = head;
@@ -369,11 +416,11 @@ void (*funcList[5])(int, char **) = {addfunc, removefunc, listfunc, helpfunc, ex
 int main(void) {
     char input[4096];
     init();
-    printf("%s\n", homepath);
+    // printf("%s\n", homepath);
     
-    printf("%s\n", backuppath);
+    // printf("%s\n", backuppath);
     
-    printf("%s\n", logpath);
+    // printf("%s\n", logpath);
 
     load_monitor_log();
 
