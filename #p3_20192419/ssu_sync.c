@@ -162,12 +162,6 @@ void addfunc(int argc, char * argv[]) {
         printf("bad path\n");
         return;
     }
-    char * ptr = strstr(temp, homepath);
-    char * ptr2 = strstr(temp, backuppath);
-    if (ptr == NULL || ptr2 != NULL || !strcmp(temp, homepath)) { //홈디렉토리 는 backup을 포함하기에 strcmp로 제외, home/ph없으면 홈 디렉토리보다 상위이므로 제외, backup하위 제외
-        printf("bad path\n");
-        return;
-    }
     strcpy(path, temp);
 
     monitorlist * t = head;
@@ -213,6 +207,13 @@ void addfunc(int argc, char * argv[]) {
     }
     if (period <= 0) {
         addhelp();
+        return;
+    }
+    char * ptr = strstr(path, homepath);
+    char * ptr2 = strstr(path, backuppath);
+    if (ptr == NULL || ptr2 != NULL || (!strcmp(temp, homepath) && (mod & 2) != 0)) {
+         //홈디렉토리 는 backup을 포함하기에 -r일때 strcmp로 제외, home/ph없으면 홈 디렉토리보다 상위이므로 제외, backup하위 제외
+        printf("bad path\n");
         return;
     }
 
