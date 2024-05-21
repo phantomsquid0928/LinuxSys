@@ -304,12 +304,12 @@ void removefunc(int argc, char * argv[]) {
         temp = temp->next;
     }
     char rmpath[MAXPATH];
-    strcpy(rmpath, temp->path);
-
+    
     if (removemlog(pid) < 0) {
         fprintf(stderr, "failed to remove pid as pid is invalid\n");
         return;
     }
+    strcpy(rmpath, temp->path);
    //
     save_monitor_log();
 
