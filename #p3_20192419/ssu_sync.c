@@ -225,10 +225,12 @@ void addfunc(int argc, char * argv[]) {
 
     if ((mod & 3) == 0 && S_ISDIR(statbuf.st_mode)) { //dir but no flag
         //wrogn
+        printf("path is dir but no flag\n");
         addhelp();
         return;
     }
     if ((mod & 3) != 0 && S_ISREG(statbuf.st_mode)) { //file but flag exists
+        printf("path is file but have wrong flag\n");
         //wrong
         addhelp();
         return;
@@ -304,12 +306,14 @@ void removefunc(int argc, char * argv[]) {
         temp = temp->next;
     }
     char rmpath[MAXPATH];
-    
-    if (removemlog(pid) < 0) {
+        
+
+    if (temp == NULL) {
         fprintf(stderr, "failed to remove pid as pid is invalid\n");
         return;
     }
     strcpy(rmpath, temp->path);
+    removemlog(pid);
    //
     save_monitor_log();
 
@@ -401,6 +405,7 @@ void helpfunc(int argc, char * argv[]) {
                 return;
             }
         }
+        printf("no such help about that command\n");
     }
     printf("Usage:\n");
     for (int i = 0;i < commandscnt; i++) {
